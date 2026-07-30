@@ -1691,7 +1691,7 @@ input,select,textarea{font-family:inherit}
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
 // GANTI URL WORKER CLOUDFLARE DI BAWAH INI (sekali saja)
-var GAS_URL = 'https://api.gdfg-app.online';
+var GAS_URL = 'https://loadflow.kemalrifael71.workers.dev'; // TEMP: testing worker baru, kembaliin ke api.gdfg-app.online setelah domain dipindah
 
 var S = {};
 var tiketId = null;
@@ -1930,7 +1930,7 @@ function loadBarangInfo(noDoc, tanggal, elId, excludeId) {
   if (!noDoc) { el.innerHTML = '<div class="barang-loading">—</div>'; return; }
   el.innerHTML = '<div class="barang-loading">Memuat...</div>';
   var week = getISOWeek(tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:noDoc, week:week, excludeId:excludeId||'' }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:noDoc, week:week, excludeId:excludeId||'', pin:_pin }, function(res) {
     if (!res || !res.success || !res.list || !res.list.length) {
       el.innerHTML = '<div class="barang-loading">—</div>';
       return;
@@ -1976,7 +1976,7 @@ function parseNamaBarangItemsJS(raw) {
 var _stdList = [];
 function loadStdList() {
   if (_stdList.length > 0) return;
-  api({ action:'getStdList' }, function(res) {
+  api({ action:'getStdList', pin:_pin }, function(res) {
     if (res && res.success) _stdList = res.list || [];
   });
 }
@@ -2046,7 +2046,7 @@ function refreshAddControls(nodoc, tanggal, truckId) {
   if (!nodoc) { planWrap.style.display='none'; manualWrap.style.display='none'; return; }
 
   var week = getISOWeek(tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:nodoc, week:week, excludeId:truckId||'' }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:nodoc, week:week, excludeId:truckId||'', pin:_pin }, function(res) {
     if (res && res.success && res.notFound) {
       // SO nggak ketemu sama sekali di planning -> mode manual (STD)
       planWrap.style.display = 'none';
@@ -2119,7 +2119,7 @@ function openGateBarangModal(r) {
   var sel = document.getElementById('gateNamaBarang');
   if (sel) sel.innerHTML = '<option value="">— Pilih Nama Barang —</option>';
   var week = getISOWeek(r.tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:r.nodoc, week:week, excludeId:r.id }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:r.nodoc, week:week, excludeId:r.id, pin:_pin }, function(res) {
     if (!sel) return;
     (res && res.list ? res.list : []).forEach(function(b) {
       var opt = document.createElement('option');
@@ -2576,10 +2576,10 @@ function startOpAutoRefresh() {
   _opRefreshInt = setInterval(function() {
     var dfrom = document.getElementById('dateFrom');
     var dto   = document.getElementById('dateTo');
-    api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'' }, function(res) {
+    api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'', pin:_pin }, function(res) {
       if (!res || !res.list) return;
       _allList = res.list;
-      api({ action:'getDockStatus' }, function(ds) {
+      api({ action:'getDockStatus', pin:_pin }, function(ds) {
         if (ds && ds.success && ds.docks) {
           window._dockMap = {};
           Object.keys(ds.docks).forEach(function(dk) {
@@ -2592,7 +2592,7 @@ function startOpAutoRefresh() {
           });
         }
         // Polling dock status (aktif/non-aktif) bersamaan
-        api({ action:'getDockManage' }, function(dm) {
+        api({ action:'getDockManage', pin:_pin }, function(dm) {
           if (dm && dm.success && dm.list) {
             _dockStatusMap = {};
             dm.list.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
@@ -2642,7 +2642,7 @@ function onDateFilterChange() {
 
 function fetchAntrian(fromDate, toDate) {
   loading(true);
-  api({ action:'getAntrian', from: fromDate||'', to: toDate||'' },
+  api({ action:'getAntrian', from: fromDate||'', to: toDate||'', pin:_pin },
     function(res){
       loading(false);
       _allList = res.list||[];
@@ -2705,7 +2705,7 @@ function switchTab(el) {
     // Render LANGSUNG pakai cache tanpa lewat renderCards
     renderDockTab();
     // Background fetch untuk update data terbaru
-    api({ action:'getDockStatus' }, function(res) {
+    api({ action:'getDockStatus', pin:_pin }, function(res) {
       if (res && res.success && res.docks) {
         window._dockMap = {};
         Object.keys(res.docks).forEach(function(dk) {
@@ -2886,7 +2886,7 @@ function updateTicker(fromDate, toDate) {
 
 
 function loadDockStatus(cb) {
-  api({ action: 'getDockManage' }, function(res) {
+  api({ action: 'getDockManage', pin:_pin }, function(res) {
     if (res && res.success && res.list) {
       _dockStatusMap = {};
       res.list.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
@@ -3996,7 +3996,7 @@ function doAdvance(id, newStatus) {
       if (res.success) {
         // Silent sync
         var _df=document.getElementById('dateFrom'), _dt=document.getElementById('dateTo');
-        api({ action:'getAntrian', from:_df?_df.value:'', to:_dt?_dt.value:'' }, function(r2){
+        api({ action:'getAntrian', from:_df?_df.value:'', to:_dt?_dt.value:'', pin:_pin }, function(r2){
           if (r2&&r2.list){ _allList=r2.list; renderAllTabs(); renderCards(); }
         }, function(){});
       } else {
@@ -4054,7 +4054,7 @@ function activateDisplaySound() {
 }
 
 function doLoadDisplay() {
-  api({ action:'getAntrian' }, renderDisplay, function(){});
+  api({ action:'getAntrianPublic' }, renderDisplay, function(){});
 }
 
 function renderDisplay(res) {
@@ -4476,7 +4476,7 @@ function openDetailDirect(btn) {
     } else if (r.status === 'START_LOADING' || r.status === 'FINISH_LOADING') {
       // Fetch dock status langsung karena belum ada
       _showDockInPopup('');
-      api({ action:'getDockStatus' }, function(ds) {
+      api({ action:'getDockStatus', pin:_pin }, function(ds) {
         if (ds && ds.success && ds.docks) {
           window._dockMap = {};
           Object.keys(ds.docks).forEach(function(dk) {
@@ -5200,7 +5200,7 @@ function downloadQRPdf() {
 function showDockPicker(id) {
   _pendingDockId = id;
   loading(true);
-  api({ action:'getDockStatus' }, function(res) {
+  api({ action:'getDockStatus', pin:_pin }, function(res) {
     loading(false);
     var occupied = (res && res.success && res.docks) ? res.docks : {};
     window._dockMap = {};
@@ -5307,7 +5307,7 @@ function doAdvanceWithDock(id, newStatus, dock) {
       if (res.success) {
         toast('✅ Dock '+dock+' – '+newStatus.replace('_',' '));
         var _df2=document.getElementById('dateFrom'), _dt2=document.getElementById('dateTo');
-        api({ action:'getAntrian', from:_df2?_df2.value:'', to:_dt2?_dt2.value:'' }, function(r2){
+        api({ action:'getAntrian', from:_df2?_df2.value:'', to:_dt2?_dt2.value:'', pin:_pin }, function(r2){
           if(r2&&r2.list){
             _allList = r2.list;
             // Rebuild _dockMap dari server
