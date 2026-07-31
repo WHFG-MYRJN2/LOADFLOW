@@ -1,6 +1,6 @@
 // Service Worker — Antrian Gudang PWA
 // Ganti versi ini setiap ada update agar cache otomatis refresh
-const CACHE   = 'antrian-v1.0.0';
+const CACHE   = 'antrian-v1.0.1';
 const ASSETS  = [
   './',
   './index.html',
