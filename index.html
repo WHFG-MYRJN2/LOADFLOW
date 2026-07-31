@@ -647,6 +647,7 @@ input,select,textarea{font-family:inherit}
 .an-mode-toggle button.active{background:#fff;color:#0f2d54;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -1081,28 +1082,9 @@ input,select,textarea{font-family:inherit}
   <div class="modal-box">
     <div class="modal-icon">🔒</div>
     <h3>Operator Login</h3>
-    <p>Masukkan PIN untuk masuk ke dashboard</p>
-    <div class="pin-display">
-      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
-      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
-      <div class="pin-dot" id="pd4"></div><div class="pin-dot" id="pd5"></div>
-    </div>
-    <div id="pinError" class="pin-error"></div>
-    <div class="pin-numpad">
-      <button class="pin-btn" onclick="pp('1')">1</button>
-      <button class="pin-btn" onclick="pp('2')">2</button>
-      <button class="pin-btn" onclick="pp('3')">3</button>
-      <button class="pin-btn" onclick="pp('4')">4</button>
-      <button class="pin-btn" onclick="pp('5')">5</button>
-      <button class="pin-btn" onclick="pp('6')">6</button>
-      <button class="pin-btn" onclick="pp('7')">7</button>
-      <button class="pin-btn" onclick="pp('8')">8</button>
-      <button class="pin-btn" onclick="pp('9')">9</button>
-      <button class="pin-btn" style="color:#ef4444" onclick="pp('C')">C</button>
-      <button class="pin-btn" onclick="pp('0')">0</button>
-      <button class="pin-btn del" onclick="pp('DEL')">⌫</button>
-      <button class="pin-btn" style="grid-column:span 3;color:#fff;background:linear-gradient(135deg,#0f2d54,#2563eb)" onclick="pp('OK')">✓ Masuk</button>
-    </div>
+    <p>Masuk pakai akun Google yang sudah didaftarkan</p>
+    <div id="gsiButtonWrap" style="display:flex;justify-content:center;margin:20px 0"></div>
+    <div id="loginStatusMsg" class="pin-error"></div>
   </div>
 </div>
 
@@ -1566,8 +1548,10 @@ input,select,textarea{font-family:inherit}
   <div class="op-header" style="position:relative">
     <h2>🏭 Dashboard Operator <span id="appVersion" style="font-size:10px;font-weight:500;opacity:.5;margin-left:6px"></span></h2>
     <div class="op-btns">
+      <button class="btn-icon" onclick="goForm()">📝 Daftar Manual</button>
       <button class="btn-icon" onclick="openDisplay()">📺 Layar</button>
       <button class="btn-icon" onclick="showQR()">📱 QR</button>
+      <button class="btn-icon admin-only" style="display:none" onclick="openApprovalModal()">👤 Approval</button>
     <button class="btn-icon" onclick="goSettings()">⚙️</button>
       <button class="btn-icon" onclick="opLogout()">← Keluar</button>
     </div>
@@ -1662,7 +1646,6 @@ input,select,textarea{font-family:inherit}
     </div>
     <div class="set-group">
       <h3>Keamanan</h3>
-      <div class="fg"><label>PIN Operator Baru</label><input type="password" id="setPin" placeholder="••••" maxlength="6" style="width:140px"><div class="set-hint">Kosongkan jika tidak ingin ganti</div></div>
     </div>
 
     <div class="set-group">
@@ -1696,8 +1679,9 @@ var GAS_URL = 'https://loadflow.kemalrifael71.workers.dev'; // TEMP: testing wor
 var S = {};
 var tiketId = null;
 var authed  = false;
-var pinBuf  = '';
-var _pin    = localStorage.getItem('op_pin') || '1234';
+var _sessionToken = localStorage.getItem('session_token') || '';
+var _sessionRole  = '';
+var _sessionEmail = '';
 var dspInt  = null;
 var tikInt  = null;
 
@@ -1714,21 +1698,18 @@ function init() {
     showPage('setup');
   } else if (hash === 'display') {
     showPage('display'); startDisplay();
-  } else if (hash === 'operator') {
-    showPage('operator'); requireAuth();
+  } else if (hash === 'form') {
+    // Form pendaftaran cuma bisa dibuka via link internal dashboard (goForm()),
+    // bukan default -- tapi kalau ada yang buka #form langsung, tetap dilayani.
+    showPage('form');
   } else if (hash.indexOf('status/') === 0) {
     var sid = hash.replace('status/', '');
     loadSettings(function(){ openStatusPage(sid); });
     return;
-  } else if (hash === 'form') {
-    // Explicit form hash → selalu ke form (dari scan QR)
-    showPage('form');
-  } else if (isPWA) {
-    // Buka dari icon PWA → langsung ke dashboard operator
-    showPage('operator'); requireAuth();
   } else {
-    // Default → form pendaftaran
-    showPage('form');
+    // Default (buka langsung, dari icon PWA, atau #operator) -> LANGSUNG ke
+    // layar login. Repo ini sekarang khusus dashboard operator/admin.
+    showPage('operator'); requireAuth();
   }
 
   // Load settings di background (update nama gudang dll)
@@ -1823,82 +1804,133 @@ function saveGasUrl() {
   });
 }
 
-// ── PIN ───────────────────────────────────────────────────────
+// ── LOGIN (Google Sign-In + Session Token) ──────────────────────
 
 function opLogout() {
   authed = false;
+  _sessionRole = ''; _sessionEmail = '';
   if (_opRefreshInt) { clearInterval(_opRefreshInt); _opRefreshInt = null; }
-  try { localStorage.removeItem('op_session'); } catch(e) {}
+  try { localStorage.removeItem('session_token'); } catch(e) {}
+  _sessionToken = '';
   showPage('form');
 }
 
 function requireAuth() {
   if (authed) { refreshOp(); setTimeout(initCardListener, 100); return; }
 
-  // Cek sesi tersimpan (valid 12 jam)
-  try {
-    var saved = localStorage.getItem('op_session');
-    if (saved) {
-      var sess = JSON.parse(saved);
-      var elapsed = (Date.now() - sess.ts) / 1000 / 3600; // jam
-      if (elapsed < 12 && sess.pin === _pin) {
-        authed = true;
+  // Cek token tersimpan di device ini (nggak ada batas waktu -- "remember on
+  // this device" -- tapi tetap divalidasi ulang ke server tiap buka app,
+  // supaya kalau admin cabut akses orang ini, langsung ketolak di sini).
+  if (_sessionToken) {
+    api({ action:'whoAmI', token:_sessionToken }, function(res) {
+      if (res && res.success) {
+        authed = true; _sessionRole = res.role; _sessionEmail = res.email;
         refreshOp();
         setTimeout(initCardListener, 100);
         setTimeout(startOpAutoRefresh, 2000);
         initAlarm();
-        return;
+        applyRoleUI();
       } else {
-        localStorage.removeItem('op_session');
+        try { localStorage.removeItem('session_token'); } catch(e) {}
+        _sessionToken = '';
+        showLoginScreen();
       }
-    }
-  } catch(e) {}
-
-  pinBuf = '';
-  updateDots();
-  setText('pinError','');
-  document.getElementById('pinModal').style.display = 'flex';
-}
-
-function pp(k) {
-  if (k === 'OK') {
-    if (pinBuf.length < 4) {
-      setText('pinError','⚠️ PIN minimal 4 digit');
-      return;
-    }
-    var attempted = pinBuf;
-    api({ action:'verifyOperatorPin', pin: attempted }, function(res) {
-      if (res && res.success) {
-        _pin = attempted;
-        localStorage.setItem('op_pin', _pin);
-        document.getElementById('pinModal').style.display = 'none';
-        authed = true; pinBuf = '';
-        refreshOp();
-        setTimeout(function(){ startOpAutoRefresh(); startAlarmInterval(); initAlarm(); }, 500);
-      } else {
-        setText('pinError', (res && res.error) ? '❌ '+res.error : '❌ PIN salah, coba lagi');
-        pinBuf = '';
-        updateDots();
-      }
-    }, function() {
-      setText('pinError','❌ Koneksi gagal, coba lagi');
-      pinBuf = '';
-      updateDots();
-    });
+    }, function() { showLoginScreen(); });
     return;
   }
-  if      (k==='C')   pinBuf = '';
-  else if (k==='DEL') pinBuf = pinBuf.slice(0,-1);
-  else if (pinBuf.length < 6) pinBuf += k;
-  updateDots();
-  setText('pinError','');
+  showLoginScreen();
 }
 
-function updateDots() {
-  for (var i=0;i<6;i++) {
-    var d = document.getElementById('pd'+i);
-    if (d) d.className = 'pin-dot' + (i<pinBuf.length?' filled':'');
+function showLoginScreen() {
+  setText('loginStatusMsg', '');
+  document.getElementById('pinModal').style.display = 'flex';
+  initGoogleSignIn();
+}
+
+function initGoogleSignIn() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    setText('loginStatusMsg', '⏳ Memuat Google Sign-In...');
+    setTimeout(initGoogleSignIn, 400);
+    return;
   }
+  google.accounts.id.initialize({
+    client_id: '1068918355925-geisoe18k26ncalr4vc4t34ss5he5f61.apps.googleusercontent.com',
+    callback: handleGoogleCredential
+  });
+  var wrap = document.getElementById('gsiButtonWrap');
+  wrap.innerHTML = '';
+  google.accounts.id.renderButton(wrap, { theme:'outline', size:'large', text:'signin_with', shape:'pill' });
+}
+
+function handleGoogleCredential(response) {
+  setText('loginStatusMsg', '⏳ Memverifikasi...');
+  api({ action:'loginGoogle', idToken: response.credential }, function(res) {
+    if (res && res.success) {
+      _sessionToken = res.token; _sessionRole = res.role; _sessionEmail = res.email;
+      try { localStorage.setItem('session_token', _sessionToken); } catch(e) {}
+      document.getElementById('pinModal').style.display = 'none';
+      authed = true;
+      refreshOp();
+      setTimeout(function(){ startOpAutoRefresh(); startAlarmInterval(); initAlarm(); }, 500);
+      applyRoleUI();
+    } else if (res && res.error === 'PENDING') {
+      setText('loginStatusMsg', '⏳ ' + (res.message || 'Menunggu approval admin.'));
+    } else {
+      setText('loginStatusMsg', '❌ ' + (res && res.message ? res.message : 'Login gagal.'));
+    }
+  }, function() {
+    setText('loginStatusMsg', '❌ Koneksi gagal, coba lagi');
+  });
+}
+
+// Tombol-tombol khusus ADMIN (kelola approval) cuma muncul kalau role cocok.
+function applyRoleUI() {
+  var els = document.querySelectorAll('.admin-only');
+  for (var i=0;i<els.length;i++) els[i].style.display = (_sessionRole === 'ADMIN') ? '' : 'none';
+}
+
+function openApprovalModal() {
+  document.getElementById('approvalModal').style.display = 'flex';
+  loadPendingApprovals();
+}
+function closeApprovalModal() {
+  document.getElementById('approvalModal').style.display = 'none';
+}
+function loadPendingApprovals() {
+  var el = document.getElementById('approvalList');
+  el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px 0">Memuat...</div>';
+  api({ action:'listPendingOperators', token:_sessionToken }, function(res) {
+    if (!res || !res.success) { el.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px 0">Gagal memuat / bukan admin</div>'; return; }
+    if (!res.list.length) { el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px 0">Tidak ada yang menunggu approval</div>'; return; }
+    el.innerHTML = res.list.map(function(u) {
+      var em = esc(u.email);
+      return '<div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:8px">'+
+        '<div style="font-weight:700;font-size:13px">'+esc(u.nama||u.email)+'</div>'+
+        '<div style="font-size:11px;color:#64748b;margin-bottom:8px">'+em+' · daftar '+esc(u.addedAt||'')+'</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<select id="role_'+em+'" class="de-inp" style="flex:1;padding:6px">'+
+            '<option value="OPERATOR">Operator</option>'+
+            '<option value="ADMIN">Admin</option>'+
+          '</select>'+
+          '<button class="btn-confirm-yes" style="padding:7px 12px" onclick="approveUser(\''+em+'\')">✓ Approve</button>'+
+          '<button class="btn-confirm-no" style="padding:7px 12px" onclick="rejectUser(\''+em+'\')">✕ Tolak</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }, function() { el.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px 0">Koneksi gagal</div>'; });
+}
+function approveUser(email) {
+  var role = document.getElementById('role_'+email).value;
+  api({ action:'approveOperator', token:_sessionToken, email:email, role:role, approve:'1' }, function(res) {
+    if (res && res.success) { toast('✅ '+email+' di-approve sebagai '+role); loadPendingApprovals(); }
+    else toast('❌ '+(res&&res.error||'Gagal'));
+  });
+}
+function rejectUser(email) {
+  api({ action:'approveOperator', token:_sessionToken, email:email, role:'OPERATOR', approve:'0' }, function(res) {
+    if (res && res.success) { toast('🚫 '+email+' ditolak'); loadPendingApprovals(); }
+    else toast('❌ '+(res&&res.error||'Gagal'));
+  });
 }
 
 // ── FORM ─────────────────────────────────────────────────────
@@ -1930,7 +1962,7 @@ function loadBarangInfo(noDoc, tanggal, elId, excludeId) {
   if (!noDoc) { el.innerHTML = '<div class="barang-loading">—</div>'; return; }
   el.innerHTML = '<div class="barang-loading">Memuat...</div>';
   var week = getISOWeek(tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:noDoc, week:week, excludeId:excludeId||'', pin:_pin }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:noDoc, week:week, excludeId:excludeId||'', token:_sessionToken }, function(res) {
     if (!res || !res.success || !res.list || !res.list.length) {
       el.innerHTML = '<div class="barang-loading">—</div>';
       return;
@@ -1976,7 +2008,7 @@ function parseNamaBarangItemsJS(raw) {
 var _stdList = [];
 function loadStdList() {
   if (_stdList.length > 0) return;
-  api({ action:'getStdList', pin:_pin }, function(res) {
+  api({ action:'getStdList', token:_sessionToken }, function(res) {
     if (res && res.success) _stdList = res.list || [];
   });
 }
@@ -2046,7 +2078,7 @@ function refreshAddControls(nodoc, tanggal, truckId) {
   if (!nodoc) { planWrap.style.display='none'; manualWrap.style.display='none'; return; }
 
   var week = getISOWeek(tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:nodoc, week:week, excludeId:truckId||'', pin:_pin }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:nodoc, week:week, excludeId:truckId||'', token:_sessionToken }, function(res) {
     if (res && res.success && res.notFound) {
       // SO nggak ketemu sama sekali di planning -> mode manual (STD)
       planWrap.style.display = 'none';
@@ -2119,7 +2151,7 @@ function openGateBarangModal(r) {
   var sel = document.getElementById('gateNamaBarang');
   if (sel) sel.innerHTML = '<option value="">— Pilih Nama Barang —</option>';
   var week = getISOWeek(r.tanggal);
-  api({ action:'getBarangByNoDoc', nodoc:r.nodoc, week:week, excludeId:r.id, pin:_pin }, function(res) {
+  api({ action:'getBarangByNoDoc', nodoc:r.nodoc, week:week, excludeId:r.id, token:_sessionToken }, function(res) {
     if (!sel) return;
     (res && res.list ? res.list : []).forEach(function(b) {
       var opt = document.createElement('option');
@@ -2145,9 +2177,9 @@ function saveGateBarangAndKeluar() {
   var idx = val.indexOf(' - ');
   var item = { sku: idx>=0?val.slice(0,idx):val, nama: idx>=0?val.slice(idx+3):'', qty:'' };
   var ctx = _gateBarangCtx;
-  api({ action:'editData', id:ctx.id, pin:_pin, nama_barang:JSON.stringify([item]) }, function(res) {
+  api({ action:'editData', id:ctx.id, token:_sessionToken, nama_barang:JSON.stringify([item]) }, function(res) {
     if (!res.success) { toast('❌ '+(res.error||'Gagal menyimpan Nama Barang')); return; }
-    api({ action:'updateStatus', id:ctx.id, status:'KELUAR', pin:_pin }, function(res2) {
+    api({ action:'updateStatus', id:ctx.id, status:'KELUAR', token:_sessionToken }, function(res2) {
       document.getElementById('gateBarangModal').style.display = 'none';
       _gateBarangCtx = null;
       if (res2.success) {
@@ -2171,7 +2203,7 @@ function showPosisiBarang(sku, nama, qty, elId, truckId) {
 
   el.innerHTML = '<div class="posisi-loading" style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">Mencari posisi...</div>';
 
-  api({ action:'getPosisiBarangFIFO', sku:sku, qty:qty, truckId:truckId||'', pin:_pin }, function(res) {
+  api({ action:'getPosisiBarangFIFO', sku:sku, qty:qty, truckId:truckId||'', token:_sessionToken }, function(res) {
     if (!res || !res.success) {
       el.innerHTML = '<div class="barang-loading">Gagal memuat posisi</div>';
       return;
@@ -2234,7 +2266,7 @@ function printPickingList() {
   var pending = items.length;
 
   items.forEach(function(it, idx) {
-    api({ action:'getPosisiBarangFIFO', sku:it.sku, qty:it.qty||0, truckId:r.id, pin:_pin }, function(res) {
+    api({ action:'getPosisiBarangFIFO', sku:it.sku, qty:it.qty||0, truckId:r.id, token:_sessionToken }, function(res) {
       results[idx] = { sku:it.sku, nama:it.nama, qty:it.qty,
         list:(res&&res.success&&res.list)||[], kurang:(res&&res.kurang)||0, totalNeeded:(res&&res.totalNeeded)||it.qty||0 };
       pending--; if (pending === 0) renderPrintWindow(w, r, results);
@@ -2576,10 +2608,10 @@ function startOpAutoRefresh() {
   _opRefreshInt = setInterval(function() {
     var dfrom = document.getElementById('dateFrom');
     var dto   = document.getElementById('dateTo');
-    api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'', pin:_pin }, function(res) {
+    api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'', token:_sessionToken }, function(res) {
       if (!res || !res.list) return;
       _allList = res.list;
-      api({ action:'getDockStatus', pin:_pin }, function(ds) {
+      api({ action:'getDockStatus', token:_sessionToken }, function(ds) {
         if (ds && ds.success && ds.docks) {
           window._dockMap = {};
           Object.keys(ds.docks).forEach(function(dk) {
@@ -2592,7 +2624,7 @@ function startOpAutoRefresh() {
           });
         }
         // Polling dock status (aktif/non-aktif) bersamaan
-        api({ action:'getDockManage', pin:_pin }, function(dm) {
+        api({ action:'getDockManage', token:_sessionToken }, function(dm) {
           if (dm && dm.success && dm.list) {
             _dockStatusMap = {};
             dm.list.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
@@ -2642,7 +2674,7 @@ function onDateFilterChange() {
 
 function fetchAntrian(fromDate, toDate) {
   loading(true);
-  api({ action:'getAntrian', from: fromDate||'', to: toDate||'', pin:_pin },
+  api({ action:'getAntrian', from: fromDate||'', to: toDate||'', token:_sessionToken },
     function(res){
       loading(false);
       _allList = res.list||[];
@@ -2705,7 +2737,7 @@ function switchTab(el) {
     // Render LANGSUNG pakai cache tanpa lewat renderCards
     renderDockTab();
     // Background fetch untuk update data terbaru
-    api({ action:'getDockStatus', pin:_pin }, function(res) {
+    api({ action:'getDockStatus', token:_sessionToken }, function(res) {
       if (res && res.success && res.docks) {
         window._dockMap = {};
         Object.keys(res.docks).forEach(function(dk) {
@@ -2886,7 +2918,7 @@ function updateTicker(fromDate, toDate) {
 
 
 function loadDockStatus(cb) {
-  api({ action: 'getDockManage', pin:_pin }, function(res) {
+  api({ action: 'getDockManage', token:_sessionToken }, function(res) {
     if (res && res.success && res.list) {
       _dockStatusMap = {};
       res.list.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
@@ -3527,7 +3559,7 @@ function savePindahDock() {
     action   : 'moveDock',
     id       : _pindahDockTruk.id,
     dock_baru: _pindahDockTarget === 'MB' ? 'MB' : _pindahDockTarget.replace('Dock ',''),
-    pin      : _pin
+    token    : _sessionToken
   }, function(res) {
     saveBtn.disabled = false; saveBtn.textContent = 'Pindahkan';
     if (res && res.success) {
@@ -3571,7 +3603,7 @@ function saveDockManage() {
   saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
   api({
     action  : 'setDockStatus',
-    pin     : _pin,
+    token   : _sessionToken,
     dock    : _dockManageCurrent,
     aktif   : String(aktif),
     alasan  : alasan,
@@ -3624,7 +3656,7 @@ function doSaveNote() {
   if (!note) { toast('⚠️ Catatan kosong'); return; }
   var btn = document.querySelector('#dNoteSection button');
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
-  api({ action:'saveNote', id:id, note:note, pin:_pin }, function(res) {
+  api({ action:'saveNote', id:id, note:note, token:_sessionToken }, function(res) {
     if (btn) { btn.disabled = false; btn.textContent = 'Simpan'; }
     if (res && res.success) {
       if (inp) inp.value = '';
@@ -3850,7 +3882,7 @@ function doTreatment(id, action) {
       _treatmentPendingId = id;
       showDockPicker(id);
     } else {
-      api({ action:'treatmentAction', id:id, treatment_action:action, pin:_pin }, function(res) {
+      api({ action:'treatmentAction', id:id, treatment_action:action, token:_sessionToken }, function(res) {
         if (res && res.success) {
           toast('🚫 Truk ditolak');
           document.getElementById('detailModal').style.display = 'none';
@@ -3959,7 +3991,7 @@ function doAI2(i, ns, keepTs) {
   showConfirm(fromSt, ns, function() {
     if (ns === 'START_LOADING') { showDockPicker(id); return; }
     if (keepTs) {
-      api({ action:'updateStatus', id:id, status:ns, pin:_pin, keepTs:'1' }, function(res){
+      api({ action:'updateStatus', id:id, status:ns, token:_sessionToken, keepTs:'1' }, function(res){
         if(res.success){ toast('✅ '+res.nomor+' → '+(STATUS_LABEL[ns]||ns)); refreshOp(); }
         else toast('❌ '+(res.error||'Gagal'));
       });
@@ -3991,12 +4023,12 @@ function doAdvance(id, newStatus) {
   if (modal) modal.style.display = 'none';
 
   // API di background
-  api({ action:'updateStatus', id:id, status:newStatus, pin:_pin },
+  api({ action:'updateStatus', id:id, status:newStatus, token:_sessionToken },
     function(res){
       if (res.success) {
         // Silent sync
         var _df=document.getElementById('dateFrom'), _dt=document.getElementById('dateTo');
-        api({ action:'getAntrian', from:_df?_df.value:'', to:_dt?_dt.value:'', pin:_pin }, function(r2){
+        api({ action:'getAntrian', from:_df?_df.value:'', to:_dt?_dt.value:'', token:_sessionToken }, function(r2){
           if (r2&&r2.list){ _allList=r2.list; renderAllTabs(); renderCards(); }
         }, function(){});
       } else {
@@ -4010,7 +4042,7 @@ function doAdvance(id, newStatus) {
 function doReset() {
   if (!confirm('Reset semua antrian hari ini?\nData akan dihapus permanen.')) return;
   loading(true);
-  api({ action:'resetAntrian', pin:_pin },
+  api({ action:'resetAntrian', token:_sessionToken },
     function(res){
       loading(false);
       toast(res.success?'✅ Reset berhasil':'❌ Gagal reset');
@@ -4122,20 +4154,17 @@ function loadSettingsForm() {
   document.getElementById('setPrefix').value = S.prefix_nomor   || 'T';
   document.getElementById('setWa').value     = S.no_wa          || '';
   document.getElementById('setPesan').value  = S.pesan_template || '';
-  document.getElementById('setPin').value    = '';
 }
 
 function doSaveSettings() {
   var params = {
     action        : 'saveSettings',
-    pin           : _pin,
+    token         : _sessionToken,
     nama_gudang   : document.getElementById('setNama').value.trim(),
     prefix_nomor  : document.getElementById('setPrefix').value.trim()||'T',
     no_wa         : document.getElementById('setWa').value.trim(),
     pesan_template: document.getElementById('setPesan').value.trim()
   };
-  var np = document.getElementById('setPin').value.trim();
-  if (np) params.new_pin = np;
   var selBuka = document.getElementById('inputAntrianBuka');
   if(selBuka) params.antrian_buka = selBuka.value || '';
   if(typeof DAYS_ID !== 'undefined') {
@@ -4149,7 +4178,7 @@ function doSaveSettings() {
   api(params,
     function(res){
       loading(false);
-      if (res.success){ toast('✅ Tersimpan'); loadSettings(applySettings); if (np){ _pin=np; localStorage.setItem('op_pin',np); } }
+      if (res.success){ toast('✅ Tersimpan'); loadSettings(applySettings); }
       else toast('❌ Gagal: '+(res.error||''));
     },
     function(){ loading(false); toast('❌ Koneksi gagal'); }
@@ -4476,7 +4505,7 @@ function openDetailDirect(btn) {
     } else if (r.status === 'START_LOADING' || r.status === 'FINISH_LOADING') {
       // Fetch dock status langsung karena belum ada
       _showDockInPopup('');
-      api({ action:'getDockStatus', pin:_pin }, function(ds) {
+      api({ action:'getDockStatus', token:_sessionToken }, function(ds) {
         if (ds && ds.success && ds.docks) {
           window._dockMap = {};
           Object.keys(ds.docks).forEach(function(dk) {
@@ -4742,7 +4771,7 @@ function dAdv(i, slot, e) {
     var modal = document.getElementById('detailModal');
     if(modal) modal.style.display = 'none';
     if (ns === 'START_LOADING') { showDockPicker(id); return; }
-    api({ action:'updateStatus', id:id, status:ns, pin:_pin, keepTs: keepTs ? '1' : '' },
+    api({ action:'updateStatus', id:id, status:ns, token:_sessionToken, keepTs: keepTs ? '1' : '' },
       function(res){
         if(res.success){
           toast('✅ '+res.nomor+' → '+(STATUS_LABEL[ns]||ns));
@@ -4973,7 +5002,7 @@ function doEditData() {
   var alasan = g('dEditAlasan');
   if (!alasan) { toast('⚠️ Alasan edit wajib diisi'); return; }
   var namaBarangJson = JSON.stringify(_editNamaBarangItems.filter(function(it){ return it && it.sku; }));
-  api({ action:'editData', id:_editDetailId, pin:_pin,
+  api({ action:'editData', id:_editDetailId, token:_sessionToken,
         nama:g('dEditNama'), nopol:g('dEditNopol').toUpperCase(),
         eksp:g('dEditEksp'), nodoc:g('dEditNodoc'),
         qty:g('dEditQty'), tujuan:g('dEditTujuan'), tipe:g('dEditTipe'), no_container:g('dEditContainer'),
@@ -5001,7 +5030,7 @@ function doDeleteMobil() {
   document.getElementById('confirmMsg').textContent   = label + ' akan dihapus dari antrian dan dipindah ke sheet Delete Mobil.';
   _confirmCb = function() {
     document.getElementById('detailModal').style.display = 'none';
-    api({ action:'deleteMobil', id:_editDetailId, pin:_pin, alasan:alasan.trim() }, function(res) {
+    api({ action:'deleteMobil', id:_editDetailId, token:_sessionToken, alasan:alasan.trim() }, function(res) {
       if (res.success) { toast('🗑️ Kendaraan berhasil dihapus'); refreshOp(); }
       else toast('❌ ' + (res.error||'Gagal menghapus'));
     });
@@ -5053,7 +5082,7 @@ function doEditStatus() {
   document.getElementById('confirmMsg').textContent   = msg;
   _confirmCb = function() {
     document.getElementById('detailModal').style.display = 'none';
-    api({ action:'editStatus', id:_editDetailId, status:ns, pin:_pin }, function(res) {
+    api({ action:'editStatus', id:_editDetailId, status:ns, token:_sessionToken }, function(res) {
       if (res.success) {
         toast('✅ Status diubah ke ' + (STATUS_LABEL[ns]||ns));
         refreshOp();
@@ -5095,7 +5124,7 @@ function runPopupAction(key, e) {
     document.getElementById('detailModal').style.display = 'none';
     if (a.ns === 'START_LOADING') { showDockPicker(a.id); return; }
     if (a.keepTs) {
-      api({ action:'updateStatus', id:a.id, status:a.ns, pin:_pin, keepTs:'1' }, function(res){
+      api({ action:'updateStatus', id:a.id, status:a.ns, token:_sessionToken, keepTs:'1' }, function(res){
         if(res.success){ toast('✅ '+res.nomor+' → '+(STATUS_LABEL[a.ns]||a.ns)); refreshOp(); }
         else toast('❌ '+(res.error||'Gagal'));
       });
@@ -5200,7 +5229,7 @@ function downloadQRPdf() {
 function showDockPicker(id) {
   _pendingDockId = id;
   loading(true);
-  api({ action:'getDockStatus', pin:_pin }, function(res) {
+  api({ action:'getDockStatus', token:_sessionToken }, function(res) {
     loading(false);
     var occupied = (res && res.success && res.docks) ? res.docks : {};
     window._dockMap = {};
@@ -5266,7 +5295,7 @@ function selectDock(dock) {
   if (_treatmentPendingId && _treatmentPendingId === pid) {
     // Dari treatment OK — panggil treatmentAction dulu (reset waktu start), lalu set dock
     _treatmentPendingId = null;
-    api({ action:'treatmentAction', id:pid, treatment_action:'OK', dock:dock, pin:_pin }, function(res) {
+    api({ action:'treatmentAction', id:pid, treatment_action:'OK', dock:dock, token:_sessionToken }, function(res) {
       if (res && res.success) {
         toast('✅ Truk masuk Proses Muat');
         refreshOp();
@@ -5302,12 +5331,12 @@ function doAdvanceWithDock(id, newStatus, dock) {
   if (modal) modal.style.display = 'none';
 
   // API
-  api({ action:'updateStatus', id:id, status:newStatus, dock:dock, pin:_pin },
+  api({ action:'updateStatus', id:id, status:newStatus, dock:dock, token:_sessionToken },
     function(res){
       if (res.success) {
         toast('✅ Dock '+dock+' – '+newStatus.replace('_',' '));
         var _df2=document.getElementById('dateFrom'), _dt2=document.getElementById('dateTo');
-        api({ action:'getAntrian', from:_df2?_df2.value:'', to:_dt2?_dt2.value:'', pin:_pin }, function(r2){
+        api({ action:'getAntrian', from:_df2?_df2.value:'', to:_dt2?_dt2.value:'', token:_sessionToken }, function(r2){
           if(r2&&r2.list){
             _allList = r2.list;
             // Rebuild _dockMap dari server
@@ -5670,6 +5699,18 @@ initSW();
       <button class="btn-confirm-no"  onclick="cancelGateBarang()">Batal</button>
       <button class="btn-confirm-yes" onclick="saveGateBarangAndKeluar()">💾 Simpan & Keluar</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ APPROVAL MODAL (ADMIN ONLY) ═══════════════════════════ -->
+<div class="modal-overlay" id="approvalModal" style="display:none" onclick="if(event.target===this)closeApprovalModal()">
+  <div class="modal-box" style="max-width:420px;text-align:left">
+    <h3 style="text-align:center">👤 Approval Akun</h3>
+    <p style="text-align:center;color:#64748b;font-size:12px">Akun yang minta akses login Google, menunggu di-approve</p>
+    <div id="approvalList" style="max-height:360px;overflow-y:auto;margin:14px 0">
+      <div style="text-align:center;color:#94a3b8;padding:20px 0">Memuat...</div>
+    </div>
+    <button class="btn-back" onclick="closeApprovalModal()">Tutup</button>
   </div>
 </div>
 
