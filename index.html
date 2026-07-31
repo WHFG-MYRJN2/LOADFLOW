@@ -1876,7 +1876,7 @@ function handleGoogleCredential(response) {
     } else if (res && res.error === 'PENDING') {
       setText('loginStatusMsg', '⏳ ' + (res.message || 'Menunggu approval admin.'));
     } else {
-      setText('loginStatusMsg', '❌ ' + (res && res.message ? res.message : 'Login gagal.'));
+      setText('loginStatusMsg', '❌ ' + (res && (res.message || res.error) ? (res.message || res.error) : 'Login gagal.'));
     }
   }, function() {
     setText('loginStatusMsg', '❌ Koneksi gagal, coba lagi');
