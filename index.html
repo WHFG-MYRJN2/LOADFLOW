@@ -3706,12 +3706,36 @@ function applyAnWeekFilter() {
   document.getElementById('anDateTo').value   = rt.to;
   var info = document.getElementById('anRangeInfo');
   if(info){ info.textContent='W'+wf+(wf!==wt?'-W'+wt:'')+' '+yr+' = '+rf.from+' s/d '+rt.to; info.style.display=''; }
-  renderAnalisis();
+  fetchAnalisisData();
+}
+
+// Fetch data KHUSUS buat tab Analisis, terpisah dari _allList dashboard —
+// supaya bisa ambil rentang tanggal berapa pun (nggak dibatasi jendela 30 hari
+// default dashboard), dan supaya nggak nampilin apa-apa sebelum user beneran
+// pilih rentang & klik "Tampilkan" (sebelumnya diam-diam pakai data dashboard
+// yang cuma kebetulan ke-load, jadi kelihatan "cuma seminggu" & filter kesannya
+// nggak ngaruh).
+function fetchAnalisisData() {
+  var df = document.getElementById('anDateFrom');
+  var dt = document.getElementById('anDateTo');
+  var fromDate = df ? df.value : '';
+  var toDate   = dt ? dt.value : '';
+  loading(true);
+  api({ action:'getAntrian', from:fromDate, to:toDate, token:_sessionToken }, function(res) {
+    loading(false);
+    if (res && res.success === false) { toast('❌ '+(res.error||'Gagal memuat data')); _anData = []; renderAnalisis(); return; }
+    _anData = (res && res.list) ? res.list : [];
+    renderAnalisis();
+  }, function() {
+    loading(false);
+    toast('❌ Gagal memuat data Analisis');
+  });
 }
 
 // ── ANALISIS PEAK ─────────────────────────────────────────────
 var _anKat  = 'ALL';
 var _anMode = 'hour';
+var _anData = null; // null = belum di-fetch sama sekali; array = hasil fetch sesuai rentang yg dipilih
 
 function renderAnalisis() {
   var el = document.getElementById('analisisView');
@@ -3724,7 +3748,7 @@ function renderAnalisis() {
   var _anFrom = _dfFrom ? _dfFrom.value : '2026-06-01';
   var _anTo   = _dfTo   ? _dfTo.value   : '';
   var startDate = _anFrom || '2026-06-01';
-  var allData = (_allList||[]).filter(function(r){
+  var allData = (_anData||[]).filter(function(r){
     var t = r.tanggal||'';
     if(_anFrom && t < _anFrom) return false;
     if(_anTo   && t > _anTo)   return false;
@@ -3772,7 +3796,7 @@ function renderAnalisis() {
     dateRow.innerHTML='<input type="date" id="anDateFrom" class="an-range-input" value="2026-06-01">'+
       '<span style="color:#94a3b8;font-size:11px">s/d</span>'+
       '<input type="date" id="anDateTo" class="an-range-input" value="'+(function(){var n=new Date();return n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);})()+'">'+
-      '<button class="an-range-btn" onclick="renderAnalisis()">Tampilkan</button>';
+      '<button class="an-range-btn" onclick="fetchAnalisisData()">Tampilkan</button>';
     rg.appendChild(dateRow);
 
     // Week inputs
@@ -3816,8 +3840,13 @@ function renderAnalisis() {
     sr.appendChild(d);
   });
 
+  if (_anData === null) {
+    var pmt=document.createElement('div'); pmt.className='an-empty';
+    pmt.textContent='📅 Pilih rentang tanggal / week di atas, lalu klik "Tampilkan"';
+    wrap.appendChild(pmt); return;
+  }
   if(!filtered.length){
-    var e=document.createElement('div'); e.className='an-empty'; e.textContent='Tidak ada data';
+    var e=document.createElement('div'); e.className='an-empty'; e.textContent='Tidak ada data pada rentang ini';
     wrap.appendChild(e); return;
   }
 
