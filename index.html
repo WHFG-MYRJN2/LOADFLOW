@@ -2804,6 +2804,19 @@ function fmtStay(ms) {
 }
 
 // Format STD Muat (dalam menit) jadi "Xj Ym" — sama gaya dengan fmtStay
+// Ambil std muat (menit) — pakai nilai yang udah dihitung server (jenis-aware:
+// LOKAL 3 detik/karton, EKSPOR 10 detik/karton) kalau ada. Fallback ke hitung
+// manual di client (asumsi 3 detik/karton) cuma buat data lama yang didaftar
+// SEBELUM field std_muat dikirim server (jaga-jaga, jarang kepakai).
+function _stdMuatMnt(r) {
+  if (r.std_muat !== undefined && r.std_muat !== '' && !isNaN(parseFloat(r.std_muat))) {
+    return parseFloat(r.std_muat);
+  }
+  if (!r.qty || parseFloat(r.qty) <= 0) return null;
+  var detikPerKarton = (String(r.jenis||'').toUpperCase() === 'EKSPOR') ? 10 : 3;
+  return Math.ceil(parseFloat(r.qty) * detikPerKarton / 60);
+}
+
 function fmtMuatDur(totalMnt) {
   if (totalMnt === null || totalMnt === undefined || isNaN(totalMnt)) return '—';
   var h = Math.floor(totalMnt / 60);
@@ -3356,10 +3369,10 @@ function renderCards() {
           '<div class="q-card-sopir">'+esc(r.nama)+'</div>'+
           '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">'+
             (r.qty&&r.qty!='0'?'<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">📦 '+esc(r.qty)+' krt</span>':'')+
-            (r.qty&&r.qty!='0'?'<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">std muat '+fmtMuatDur(Math.ceil(parseFloat(r.qty)*3/60))+'</span>':'')+
+            (r.qty&&r.qty!='0'?'<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">std muat '+fmtMuatDur(_stdMuatMnt(r))+'</span>':'')+
             (function(){
               var aktualBadge = '';
-              var stdMnt = r.qty && parseFloat(r.qty)>0 ? Math.ceil(parseFloat(r.qty)*3/60) : null;
+              var stdMnt = _stdMuatMnt(r);
               if ((r.status==='FINISH_LOADING'||r.status==='KELUAR') && r.waktu_start && r.waktu_finish) {
                 // Statis
                 var tS = parseTs(r.waktu_start, r.tanggal);
@@ -3369,7 +3382,7 @@ function renderCards() {
                   var over = stdMnt !== null && aktualMnt > stdMnt;
                   var abg = over ? '#fff1f2' : '#f0fdf4';
                   var acl = over ? '#be123c' : '#15803d';
-                  aktualBadge = '<span style="background:'+abg+';color:'+acl+';border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">aktual '+aktualMnt+'m</span>';
+                  aktualBadge = '<span style="background:'+abg+';color:'+acl+';border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">aktual '+fmtMuatDur(aktualMnt)+'</span>';
                 }
               } else if (r.status==='START_LOADING' && r.waktu_start) {
                 // Realtime
@@ -3379,7 +3392,7 @@ function renderCards() {
                   var over2 = stdMnt !== null && rtMnt > stdMnt;
                   var abg2 = over2 ? '#fff1f2' : '#f0fdf4';
                   var acl2 = over2 ? '#be123c' : '#15803d';
-                  aktualBadge = '<span id="muat_'+r.id+'" style="background:'+abg2+';color:'+acl2+';border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">aktual '+rtMnt+'m</span>';
+                  aktualBadge = '<span id="muat_'+r.id+'" style="background:'+abg2+';color:'+acl2+';border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700">aktual '+fmtMuatDur(rtMnt)+'</span>';
                 }
               }
               return aktualBadge;
@@ -3428,11 +3441,11 @@ function renderCards() {
           var tS = parseTs(r.waktu_start, r.tanggal);
           if (tS) {
             var rtMnt = Math.round((Date.now()-tS)/60000);
-            var stdMnt = r.qty && parseFloat(r.qty)>0 ? Math.ceil(parseFloat(r.qty)*3/60) : null;
+            var stdMnt = _stdMuatMnt(r);
             var over = stdMnt !== null && rtMnt > stdMnt;
             elM.style.background = over ? '#fff1f2' : '#f0fdf4';
             elM.style.color = over ? '#be123c' : '#15803d';
-            elM.textContent = 'aktual '+rtMnt+'m';
+            elM.textContent = 'aktual '+fmtMuatDur(rtMnt);
           }
         }
       }
@@ -4252,7 +4265,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.1.4';
+var APP_VERSION = 'LOADFLOW-v1.1.2';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -4466,7 +4479,7 @@ function openDetailDirect(btn) {
     // Grid
     var grid = document.getElementById('dGrid');
     // STD Muat
-    var _stdMntRaw = (r.qty && parseFloat(r.qty) > 0) ? Math.ceil(parseFloat(r.qty)*3/60) : null;
+    var _stdMntRaw = _stdMuatMnt(r);
     var _stdMuat = _stdMntRaw !== null ? fmtMuatDur(_stdMntRaw) : '-';
     var _targetSelesai = computeTargetSelesai(r, _stdMntRaw);
     var isEkspD = (r.jenis||'').toUpperCase() === 'EKSPOR';
@@ -4672,7 +4685,7 @@ function openDetail(r) {
   setText('dNama',  r.nama);
   setText('dEksp',  r.eksp || '—');
 
-  var _stdMntRaw2 = (r.qty && parseFloat(r.qty) > 0) ? Math.ceil(parseFloat(r.qty)*3/60) : null;
+  var _stdMntRaw2 = _stdMuatMnt(r);
   var _stdMuat2 = _stdMntRaw2 !== null ? fmtMuatDur(_stdMntRaw2) : '—';
   var _targetSelesai2 = computeTargetSelesai(r, _stdMntRaw2);
   var rows = [
