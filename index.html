@@ -4247,22 +4247,15 @@ var _swReg = null;
 function initSW() {
   if (!('serviceWorker' in navigator)) return;
 
-  // Baca versi dari nama cache di sw.js (satu-satunya sumber, nggak perlu
-  // diduplikat di sini) — TAPI tunggu `serviceWorker.ready` dulu (baru resolve
-  // setelah SW beneran aktif & install-nya kelar bikin cache-nya), bukan
-  // langsung cek caches.keys() begitu halaman dibuka. Sebelumnya cek ini
-  // jalan BARENGAN sama proses register (race condition) — kadang caches.keys()
-  // sempat dicek duluan sebelum cache-nya beneran kebentuk, jadi labelnya
-  // kosong. Nunggu .ready dulu nutup celah itu.
-  if ('caches' in window) {
-    navigator.serviceWorker.ready.then(function() {
-      caches.keys().then(function(keys) {
-        var v = keys.find(function(k){ return k.indexOf('antrian-') === 0; });
-        var el = document.getElementById('appVersion');
-        if (v && el) el.textContent = v;
-      });
-    }).catch(function(){});
-  }
+  navigator.serviceWorker.ready.then(function(reg) {
+    if (!reg.active) return;
+    var mc = new MessageChannel();
+    mc.port1.onmessage = function(ev) {
+      var el = document.getElementById('appVersion');
+      if (el && ev.data) el.textContent = ev.data;
+    };
+    reg.active.postMessage('getVersion', [mc.port2]);
+  }).catch(function(){});
 
   navigator.serviceWorker.register('sw.js').then(function(reg) {
     _swReg = reg;
