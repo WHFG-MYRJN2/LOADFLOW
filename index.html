@@ -1682,6 +1682,10 @@ input,select,textarea{font-family:inherit}
 // ── CONFIG ──────────────────────────────────────────────────
 // GANTI URL WORKER CLOUDFLARE DI BAWAH INI (sekali saja)
 var GAS_URL = 'https://loadflow.gdfg-app.online';
+// PENTING: samain manual sama nilai `CACHE` di sw.js tiap kali versi naik —
+// ini dipakai buat nampilin label versi di header, dibaca langsung (bukan
+// nunggu caches.keys() yang kadang belum kebentuk pas halaman baru dimuat).
+var APP_VERSION = 'v3.6.0';
 
 var S = {};
 var tiketId = null;
@@ -4245,17 +4249,9 @@ function toast(msg){
 var _swReg = null;
 
 function initSW() {
+  var elV = document.getElementById('appVersion');
+  if (elV) elV.textContent = APP_VERSION;
   if (!('serviceWorker' in navigator)) return;
-  // Baca versi dari SW
-  if ('caches' in window) {
-    caches.keys().then(function(keys) {
-      var v = keys.find(function(k){ return k.startsWith('antrian-'); });
-      if (v) {
-        var el = document.getElementById('appVersion');
-        if (el) el.textContent = v;
-      }
-    });
-  }
   navigator.serviceWorker.register('sw.js').then(function(reg) {
     _swReg = reg;
     reg.addEventListener('updatefound', function() {
