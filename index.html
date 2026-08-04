@@ -1681,7 +1681,7 @@ input,select,textarea{font-family:inherit}
 <script>
 // ── CONFIG ──────────────────────────────────────────────────
 // GANTI URL WORKER CLOUDFLARE DI BAWAH INI (sekali saja)
-var GAS_URL = 'https://loadflow.gdfg-app.online/'; // TEMP: testing worker baru, kembaliin ke api.gdfg-app.online setelah domain dipindah
+var GAS_URL = 'https://loadflow.gdfg-app.online';
 
 var S = {};
 var tiketId = null;
@@ -1829,6 +1829,8 @@ function requireAuth() {
   // this device" -- tapi tetap divalidasi ulang ke server tiap buka app,
   // supaya kalau admin cabut akses orang ini, langsung ketolak di sini).
   if (_sessionToken) {
+    loading(true); // nyalain loading dari awal, sebelum whoAmI selesai -- biar nggak
+                    // keliatan dashboard kosong sesaat sebelum refreshOp() jalan
     api({ action:'whoAmI', token:_sessionToken }, function(res) {
       if (res && res.success) {
         authed = true; _sessionRole = res.role; _sessionEmail = res.email;
@@ -1838,11 +1840,12 @@ function requireAuth() {
         initAlarm();
         applyRoleUI();
       } else {
+        loading(false);
         try { localStorage.removeItem('session_token'); } catch(e) {}
         _sessionToken = '';
         showLoginScreen();
       }
-    }, function() { showLoginScreen(); });
+    }, function() { loading(false); showLoginScreen(); });
     return;
   }
   showLoginScreen();
