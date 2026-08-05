@@ -1825,8 +1825,9 @@ function opLogout() {
   showPage('form');
 }
 
-function requireAuth() {
+function requireAuth(retryLeft) {
   if (authed) { refreshOp(); setTimeout(initCardListener, 100); return; }
+  if (retryLeft === undefined) retryLeft = 2; // total 3x coba sebelum nyerah
 
   // Cek token tersimpan di device ini (nggak ada batas waktu -- "remember on
   // this device" -- tapi tetap divalidasi ulang ke server tiap buka app,
@@ -1843,12 +1844,26 @@ function requireAuth() {
         initAlarm();
         applyRoleUI();
       } else {
+        // res sukses diterima TAPI ditolak (token invalid/dicabut admin) --
+        // ini penolakan yang sah, bukan soal koneksi, jangan di-retry.
         loading(false);
         try { localStorage.removeItem('session_token'); } catch(e) {}
         _sessionToken = '';
         showLoginScreen();
       }
-    }, function() { loading(false); showLoginScreen(); });
+    }, function() {
+      // Gagal di level KONEKSI (network error/timeout/GAS lagi cold-start) --
+      // ini yang paling sering kejadian pas app baru dibuka. Coba lagi
+      // beberapa kali dengan jeda dulu sebelum nyerah nunjukin layar login,
+      // supaya token yang sebenarnya masih valid nggak dianggap gagal cuma
+      // gara-gara 1x hiccup jaringan.
+      if (retryLeft > 0) {
+        setTimeout(function(){ requireAuth(retryLeft - 1); }, 1200);
+      } else {
+        loading(false);
+        showLoginScreen();
+      }
+    });
     return;
   }
   showLoginScreen();
@@ -2327,7 +2342,7 @@ function renderPrintWindow(w, r, items) {
       'th{background:#f1f5f9}'+
       '@media print{ .no-print{display:none} }'+
       '.ttd-wrap{display:flex;justify-content:space-between;margin-top:48px}'+
-      '.ttd-box{width:30%;text-align:center;font-size:12.5px}'+
+      '.ttd-box{width:42%;text-align:center;font-size:12.5px}'+
       '.ttd-line{border-top:1px solid #0f172a;margin-top:56px;padding-top:6px}'+
     '</style></head><body>'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
@@ -2347,9 +2362,11 @@ function renderPrintWindow(w, r, items) {
       '<div><b>Tanggal</b>: '+esc(r.tanggal||'-')+'</div>'+
     '</div>'+
     itemSections+
+    '<div style="border:2px solid #dc2626;border-radius:8px;padding:14px 18px;margin:14px 0;text-align:center">'+
+      '<p style="margin:0;font-size:17px;font-weight:800;color:#dc2626;letter-spacing:.3px">PASTIKAN MFD/PRODATE SESUAI DENGAN SI, CORET PRODATE YANG TIDAK DIGUNAKAN</p>'+
+    '</div>'+
     '<div class="ttd-wrap">'+
-      '<div class="ttd-box">Admin<div class="ttd-line">( &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; )</div></div>'+
-      '<div class="ttd-box">Checker<div class="ttd-line">( &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; )</div></div>'+
+      '<div class="ttd-box">Picker<div class="ttd-line">( &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; )</div></div>'+
       '<div class="ttd-box">Pengawas<div class="ttd-line">( &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; )</div></div>'+
     '</div>'+
     '<script>window.onload=function(){window.print();};<\/script>'+
@@ -4265,7 +4282,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.1.5';
+var APP_VERSION = 'LOADFLOW-v1.1.7';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
