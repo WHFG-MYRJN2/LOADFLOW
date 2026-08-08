@@ -1731,10 +1731,15 @@ function init() {
 // ── API CALL ─────────────────────────────────────────────────
 function api(params, cb, errCb) {
   var url = GAS_URL + '?' + new URLSearchParams(params).toString();
-  fetch(url, { redirect: 'follow' })
-    .then(function(r) { return r.json(); })
+  var ctrl = ('AbortController' in window) ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function(){ ctrl.abort(); }, 15000) : null; // 15 detik -- kalau
+    // nggak dapet balesan sama sekali (sinyal lemah, request "nyangkut"), anggap
+    // gagal biar bisa di-retry, bukan nunggu selamanya (fetch() nggak ada
+    // timeout bawaan).
+  fetch(url, { redirect: 'follow', signal: ctrl ? ctrl.signal : undefined })
+    .then(function(r) { if (timer) clearTimeout(timer); return r.json(); })
     .then(function(d) { if (cb) cb(d); })
-    .catch(function(e) { if (errCb) errCb(e); else toast('❌ Koneksi gagal'); });
+    .catch(function(e) { if (timer) clearTimeout(timer); if (errCb) errCb(e); else toast('❌ Koneksi gagal'); });
 }
 
 // ── SETTINGS ─────────────────────────────────────────────────
@@ -2222,6 +2227,23 @@ function saveGateBarangAndKeluar() {
 
 var _lastPosisiBarang = null; // cache hasil FIFO terakhir buat di-print
 
+// Hapus kunci alokasi lama (kalau curiga basi, misal ada stok baru masuk
+// BinLoc setelah SKU ini pertama kali dikunci) lalu cari ulang FRESH.
+function refreshPosisiBarang(sku, nama, qty, elId, truckId) {
+  if (!confirm('Cari ulang lokasi dari stok terkini? Alokasi lama buat SKU ini akan dilepas.')) return;
+  var el = document.getElementById(elId);
+  if (el) el.innerHTML = '<div class="posisi-loading" style="text-align:center;padding:12px;color:#94a3b8;font-size:12px">Menghapus kunci lama...</div>';
+  api({ action:'resetPosisiBarangLock', truckId:truckId||'', sku:sku, token:_sessionToken }, function(res) {
+    if (res && res.success) {
+      toast('✅ Kunci lama dihapus, cari ulang...');
+      showPosisiBarang(sku, nama, qty, elId, truckId);
+    } else {
+      toast('❌ Gagal reset: '+(res&&res.error||''));
+      showPosisiBarang(sku, nama, qty, elId, truckId);
+    }
+  }, function() { toast('❌ Koneksi gagal'); });
+}
+
 function showPosisiBarang(sku, nama, qty, elId, truckId) {
   var el = document.getElementById(elId);
 
@@ -2239,6 +2261,7 @@ function showPosisiBarang(sku, nama, qty, elId, truckId) {
     _lastPosisiBarang = { sku:sku, nama:nama, qty:qty, list:res.list||[], kurang:res.kurang||0, totalNeeded:res.totalNeeded||qty };
     var html = '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">'+
       '<button class="btn-sec" style="width:100%;font-size:12px;padding:7px 10px" onclick="backToBarangInfo(\''+elId+'\')">&larr; Kembali</button>'+
+      '<button class="btn-sec" style="width:100%;font-size:12px;padding:7px 10px;color:#b45309;background:#fffbeb;border-color:#fde68a" onclick="refreshPosisiBarang(\''+esc(sku)+'\',\''+esc(nama).replace(/'/g,"\\'")+'\','+qty+',\''+elId+'\',\''+(truckId||'')+'\')">&#128260; Refresh Lokasi (kalau stok baru masuk)</button>'+
       '<button class="btn-sec" style="width:100%;font-size:12px;padding:7px 10px;color:#0f766e;background:#f0fdfa;border-color:#99f6e4" onclick="printPickingList()">&#128424; Cetak Picking List</button>'+
     '</div>';
     html += '<div class="posisi-header">'+
@@ -4282,7 +4305,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.1.7';
+var APP_VERSION = 'LOADFLOW-v1.1.2';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
