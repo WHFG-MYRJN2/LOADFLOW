@@ -2853,7 +2853,9 @@ function _stdMuatMnt(r) {
     return parseFloat(r.std_muat);
   }
   if (!r.qty || parseFloat(r.qty) <= 0) return null;
-  var detikPerKarton = (String(r.jenis||'').toUpperCase() === 'EKSPOR') ? 10 : 3;
+  var j = String(r.jenis||'').toUpperCase();
+  var t = String(r.tipe||'').toUpperCase();
+  var detikPerKarton = (j === 'EKSPOR' || t === 'SUBDIST') ? 10 : 3;
   return Math.ceil(parseFloat(r.qty) * detikPerKarton / 60);
 }
 
@@ -4305,7 +4307,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.1.8';
+var APP_VERSION = 'LOADFLOW-v1.1.2';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
