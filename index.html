@@ -2679,6 +2679,9 @@ function startOpAutoRefresh() {
     var dfrom = document.getElementById('dateFrom');
     var dto   = document.getElementById('dateTo');
     api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'', token:_sessionToken }, function(res) {
+      if (res && res.success === false && res.error === 'Unauthorized') {
+        toast('⚠️ Sesi login berakhir, silakan login ulang'); opLogout(); return;
+      }
       if (!res || !res.list) return;
       _allList = res.list;
       api({ action:'getDockStatus', token:_sessionToken }, function(ds) {
@@ -2747,6 +2750,13 @@ function fetchAntrian(fromDate, toDate) {
   api({ action:'getAntrian', from: fromDate||'', to: toDate||'', token:_sessionToken },
     function(res){
       loading(false);
+      if (res && res.success === false) {
+        // Token ditolak server (Unauthorized) -- JANGAN diam-diam nunjukin
+        // list kosong (bikin salah paham "beneran nggak ada antrian"), paksa
+        // login ulang biar jelas.
+        if (res.error === 'Unauthorized') { toast('⚠️ Sesi login berakhir, silakan login ulang'); opLogout(); return; }
+        toast('❌ '+(res.error||'Gagal memuat data')); return;
+      }
       _allList = res.list||[];
       // Rebuild _dockMap dari server
       window._dockMap = {};
