@@ -1,6 +1,6 @@
 // Service Worke — Antrian Gudang PWA
 // Ganti versi ini setiap ada update agar cache otomatis refresh
-const CACHE   = 'LOADFLOW-v1.2.4';
+const CACHE   = 'LOADFLOW-v1.3.0';
 const ASSETS  = [
   './',
   './index.html',
