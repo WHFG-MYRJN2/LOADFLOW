@@ -2376,35 +2376,69 @@ function submitForm() {
 
   var isGandeng = jenis_kendaraan.toLowerCase() === 'gandeng';
 
-  function doRegister(nopolOverride, suffix, cb) {
+  // doRegisterWithRetry() -- auto-retry kalau gagal koneksi (BUKAN kalau
+  // server nolak karena validasi, itu langsung nyerah ke caller). Ini AMAN
+  // diulang otomatis karena ambilAntrian() di backend sekarang idempotent:
+  // key dari nama+nopol+no.dokumen di-cache 3 menit -- kalau submit pertama
+  // SEBENERNYA udah sukses di server tapi responsnya nggak sempat balik ke
+  // HP ini (penyebab paling umum error di sini), submit ulang otomatis ini
+  // BUKAN bikin baris baru, server balikin tiket yang SAMA persis. Jadi
+  // sopir kemungkinan besar tetap dapet tiketnya tanpa perlu ngapa-ngapain,
+  // nggak kejebak di form doang kayak sebelumnya.
+  function doRegisterWithRetry(nopolOverride, suffix, cb, attempt) {
+    attempt = attempt || 1;
+    var MAX_ATTEMPT = 3; // percobaan awal + 2x auto-retry
     api({ action:'ambilAntrian', nama:nama, eksp:eksp, nopol:nopolOverride,
           nodoc:nodoc, qty:qty, jenis_kendaraan: isGandeng ? ('Gandeng '+suffix) : jenis_kendaraan,
           jenis:jenis, tipe:tipe, tujuan:tujuan, hp:hp, no_container:no_container },
       function(res) { cb(null, res); },
-      function(err) { cb(err, null); }
+      function(err) {
+        if (attempt < MAX_ATTEMPT) {
+          setTimeout(function(){ doRegisterWithRetry(nopolOverride, suffix, cb, attempt+1); }, 2000);
+          return;
+        }
+        cb(err, null);
+      }
     );
+  }
+
+  // Fallback terakhir kalau SEMUA percobaan (termasuk auto-retry) tetap
+  // gagal -- daripada cuma alert() doang dan sopir kejebak di form tanpa
+  // jalan keluar (tiket belum ada, jadi tombol "Hubungi Operator" di halaman
+  // tiket juga belum bisa diakses), di sini langsung ditawarin buka WhatsApp
+  // ke operator, TANPA perlu nomor tiket -- karena datanya kemungkinan
+  // sebenarnya sudah tersimpan meski gagal muncul di HP ini.
+  function tawarkanWaOperator(namaSopir, nopolSopir, konteks) {
+    var pesan = 'Halo, saya '+namaSopir+' No. Pol '+nopolSopir+' -- sudah coba daftar antrian'+(konteks?' ('+konteks+')':'')+' beberapa kali tapi terus gagal/koneksi putus. Mohon dicek & dibantu manual, terima kasih.';
+    var link = 'https://wa.me/'+(S.no_wa||'')+'?text='+encodeURIComponent(pesan);
+    var mauWa = confirm('⚠️ Gagal daftar setelah beberapa kali percobaan otomatis.\n\nData KEMUNGKINAN tetap sudah tersimpan di server walau gagal muncul di sini.\n\nBuka WhatsApp ke operator sekarang buat konfirmasi manual?');
+    if (mauWa) window.open(link, '_blank');
   }
 
   if (isGandeng) {
     var nopol1 = nopol + ' (G1)';
     var nopol2 = nopol + ' (G2)';
-    doRegister(nopol1, 'G1', function(err1, res1) {
+    doRegisterWithRetry(nopol1, 'G1', function(err1, res1) {
       if (err1) {
         loading(false); btn.disabled=false; btn.textContent='Ambil Nomor Antrian →';
-        alert('⚠️ Koneksi lambat/gagal saat proses G1.\n\nJANGAN langsung coba daftar lagi — data KEMUNGKINAN sudah tersimpan di server walau muncul gagal di HP ini. Cek dulu ke operator/dashboard sebelum daftar ulang, supaya nggak dobel.');
+        tawarkanWaOperator(nama, nopol1, 'Gandeng G1');
         return;
       }
       if (!res1 || !res1.success) {
         loading(false); btn.disabled=false; btn.textContent='Ambil Nomor Antrian →';
         toast('❌ Gagal daftarkan G1: '+(res1&&res1.error||'Error')); return;
       }
-      doRegister(nopol2, 'G2', function(err2, res2) {
+      doRegisterWithRetry(nopol2, 'G2', function(err2, res2) {
         loading(false); btn.disabled=false; btn.textContent='Ambil Nomor Antrian →';
         if (err2) {
-          alert('⚠️ G1 berhasil ('+res1.nomor+'). Tapi koneksi lambat/gagal saat proses G2 — G2 KEMUNGKINAN tetap tersimpan walau muncul gagal. Cek dulu ke operator sebelum daftar ulang G2, supaya nggak dobel.');
+          // G1 sukses (ada tiketnya) -- tetap tampilkan itu ke sopir daripada
+          // dia kejebak tanpa tiket sama sekali, plus tawarkan WA khusus G2.
+          showTiket(res1);
+          tawarkanWaOperator(nama, nopol2, 'Gandeng G2');
           return;
         }
         if (!res2 || !res2.success) {
+          showTiket(res1);
           toast('❌ G1 berhasil ('+res1.nomor+') tapi G2 gagal: '+(res2&&res2.error||'Error')); return;
         }
         // Tampilkan tiket G1, info G2 di toast
@@ -2413,15 +2447,11 @@ function submitForm() {
       });
     });
   } else {
-    doRegister(nopol, '', function(err, res) {
+    doRegisterWithRetry(nopol, '', function(err, res) {
       loading(false); btn.disabled=false; btn.textContent='Ambil Nomor Antrian →';
       if (res && res.success) { showTiket(res); return; }
       if (err) {
-        // Gagal di level KONEKSI (timeout/network) -- server BISA JADI tetap
-        // sempat nyimpen datanya walau balesannya nggak sempat sampai ke HP
-        // ini. JANGAN suruh user asal klik ulang, itu bisa bikin truk yang
-        // sama kedaftar 2x di sheet.
-        alert('⚠️ Koneksi lambat/terputus saat mendaftar.\n\nJANGAN langsung coba daftar lagi — data KEMUNGKINAN sudah tersimpan di server walau muncul gagal di sini. Cek dulu ke operator/dashboard (cari nomor polisi '+nopol+') sebelum coba daftar ulang, supaya nggak tercatat dobel.');
+        tawarkanWaOperator(nama, nopol, '');
         return;
       }
       toast('❌ '+(res&&res.error||'Gagal'));
@@ -4119,7 +4149,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.2.7';
+var APP_VERSION = 'LOADFLOW-v1.2.8';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
