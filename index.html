@@ -112,19 +112,7 @@ input,select,textarea{font-family:inherit}
 .btn-back:hover{background:#f8fafc;border-color:#cbd5e1}
 
 /* ═══════ DISPLAY (TV) ═══════ */
-#page-display{background:radial-gradient(ellipse at center,#091e38 0%,#040d1a 100%);align-items:center;justify-content:center;min-height:100vh;padding:40px;position:relative;overflow:hidden}
-#page-display::before{content:'';position:absolute;width:600px;height:600px;background:radial-gradient(circle,rgba(37,99,235,.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-.dsp-time{position:fixed;top:24px;right:32px;color:#334155;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:2px}
-.dsp-gudang{color:#334155;font-size:18px;font-weight:800;letter-spacing:3px;text-transform:uppercase;text-align:center;margin-bottom:28px}
-.dsp-label{color:#334155;font-size:13px;letter-spacing:4px;text-transform:uppercase;text-align:center;margin-bottom:10px;font-weight:700}
-.dsp-nomor{font-size:clamp(96px,18vw,192px);font-weight:900;color:#60a5fa;letter-spacing:8px;line-height:1;text-align:center;margin-bottom:10px;text-shadow:0 0 60px rgba(96,165,250,.5),0 0 120px rgba(96,165,250,.25);animation:pulse 3s ease-in-out infinite}
 @keyframes pulse{0%,100%{text-shadow:0 0 60px rgba(96,165,250,.5),0 0 120px rgba(96,165,250,.25)}50%{text-shadow:0 0 80px rgba(96,165,250,.7),0 0 160px rgba(96,165,250,.4)}}
-.dsp-nama{color:#e2e8f0;font-size:clamp(20px,3vw,30px);font-weight:700;text-align:center;margin-bottom:4px}
-.dsp-nopol{color:#475569;font-size:clamp(15px,2.5vw,22px);text-align:center;margin-bottom:36px}
-.dsp-divider{width:200px;height:1px;background:linear-gradient(90deg,transparent,#1e3a5f,transparent);margin:0 auto 28px}
-.dsp-next-label{color:#334155;font-size:12px;letter-spacing:3px;text-transform:uppercase;text-align:center;margin-bottom:14px;font-weight:700}
-.dsp-next-list{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
-.dsp-next-item{background:#0f2040;color:#64748b;padding:10px 22px;border-radius:10px;font-size:22px;font-weight:800;letter-spacing:3px;border:1px solid #1e3a5f}
 
 /* ═══════ OPERATOR ═══════ */
 .op-header{background:linear-gradient(135deg,#091e38 0%,#0f2d54 100%);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(9,30,56,.4);gap:10px}
@@ -409,16 +397,7 @@ input,select,textarea{font-family:inherit}
 
 .q-card-date{font-size:11px;color:#94a3b8;font-weight:700;background:#f1f5f9;border-radius:5px;padding:2px 6px;margin-right:4px;letter-spacing:.3px}
 
-.dsp-cols{display:flex;gap:0;width:100%;max-width:1200px;align-items:flex-start;justify-content:center}
-.dsp-col{flex:1;display:flex;flex-direction:column;align-items:center;padding:0 24px}
-.dsp-separator{width:2px;background:linear-gradient(180deg,transparent,#1e3a5f,transparent);min-height:400px;flex-shrink:0}
-.dsp-col-title{font-size:20px;font-weight:900;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;padding:8px 20px;border-radius:10px}
-.dsp-lokal-title{background:#0f2d54;color:#60a5fa}
-.dsp-ekspor-title{background:#1a1a3e;color:#a78bfa}
-.dsp-nomor-e{color:#a78bfa;text-shadow:0 0 60px rgba(167,139,250,.5),0 0 120px rgba(167,139,250,.25)}
 @media(max-width:700px){
-  .dsp-cols{flex-direction:column}
-  .dsp-separator{width:80%;height:2px;min-height:0;background:linear-gradient(90deg,transparent,#1e3a5f,transparent);margin:24px auto}
 }
 
 /* ═══════ RUNNING TEXT (TICKER) ═══════ */
@@ -569,26 +548,10 @@ input,select,textarea{font-family:inherit}
 .form-status-bar.open{background:#dcfce7;color:#16a34a;border:1.5px solid #86efac}
 .form-status-bar.closed{background:#fee2e2;color:#dc2626;border:1.5px solid #fca5a5}
 
-.dsp-cols{display:flex;width:100%;max-width:1400px;gap:0;align-items:flex-start;margin-top:10px}
-.dsp-col{flex:1;display:flex;flex-direction:column;align-items:center;padding:0 30px}
-.dsp-col-sep{width:2px;background:linear-gradient(180deg,transparent,#1e3a5f 30%,#1e3a5f 70%,transparent);min-height:500px;flex-shrink:0;margin-top:40px}
-.dsp-col-badge{font-size:18px;font-weight:900;letter-spacing:3px;padding:8px 24px;border-radius:12px;margin-bottom:18px}
-.dsp-lokal-badge{background:rgba(37,99,235,.2);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
-.dsp-ekspor-badge{background:rgba(124,58,237,.2);color:#c084fc;border:1px solid rgba(192,132,252,.3)}
-.dsp-nomor-e{color:#c084fc;text-shadow:0 0 60px rgba(192,132,252,.4)}
 @media(max-width:700px){
-  .dsp-cols{flex-direction:column;align-items:center}
-  .dsp-col-sep{width:80%;height:2px;min-height:0;margin:16px 0;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)}
 }
 
 /* Display redesign */
-.dsp-header-row{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:1400px;margin-bottom:24px}
-.dsp-dock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;width:100%;max-width:1400px;margin-bottom:24px}
-.dsp-dock-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;text-align:center;transition:all .3s}
-.dsp-dock-card.lokal{border-color:rgba(96,165,250,.4);background:rgba(37,99,235,.1)}
-.dsp-dock-card.ekspor{border-color:rgba(192,132,252,.4);background:rgba(124,58,237,.1)}
-.dsp-dock-card.finish{opacity:.7;border-style:dashed}
-.dsp-dock-card.mb{border-color:rgba(252,165,165,.4);background:rgba(220,38,38,.08)}
 .ddc-dock{font-size:13px;font-weight:700;letter-spacing:1px;margin-bottom:6px;opacity:.7}
 .ddc-nomor{font-size:36px;font-weight:900;letter-spacing:3px;margin-bottom:4px}
 .lokal .ddc-nomor{color:#60a5fa}
@@ -597,15 +560,7 @@ input,select,textarea{font-family:inherit}
 .ddc-status{font-size:11px;font-weight:700;letter-spacing:1px;opacity:.6;text-transform:uppercase;margin-bottom:8px}
 .ddc-nopol{font-size:16px;font-weight:700;color:#e2e8f0;margin-bottom:2px}
 .ddc-info{font-size:12px;color:#64748b}
-.dsp-empty{font-size:20px;color:#334155;text-align:center;padding:40px;grid-column:1/-1}
 
-.dsp-waiting-section{width:100%;max-width:1400px;background:rgba(255,255,255,.03);border-radius:16px;border:1px solid rgba(255,255,255,.07);padding:16px 24px}
-.dsp-waiting-row{display:flex;gap:24px}
-.dsp-waiting-col{flex:1}
-.dsp-waiting-divider{width:1px;background:rgba(255,255,255,.08)}
-.dsp-waiting-title{font-size:13px;font-weight:700;letter-spacing:1px;color:#334155;text-transform:uppercase;margin-bottom:10px}
-.dsp-next-list{display:flex;flex-wrap:wrap;gap:8px}
-.dsp-next-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:6px 14px;border-radius:8px;font-size:16px;font-weight:800;color:#94a3b8}
 
 /* ANALISIS */
 #analisisView{background:#f1f5f9;min-height:calc(100vh - 200px);padding:14px}
@@ -836,16 +791,7 @@ input,select,textarea{font-family:inherit}
 
 .q-card-date{font-size:11px;color:#94a3b8;font-weight:700;background:#f1f5f9;border-radius:5px;padding:2px 6px;margin-right:4px;letter-spacing:.3px}
 
-.dsp-cols{display:flex;gap:0;width:100%;max-width:1200px;align-items:flex-start;justify-content:center}
-.dsp-col{flex:1;display:flex;flex-direction:column;align-items:center;padding:0 24px}
-.dsp-separator{width:2px;background:linear-gradient(180deg,transparent,#1e3a5f,transparent);min-height:400px;flex-shrink:0}
-.dsp-col-title{font-size:20px;font-weight:900;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;padding:8px 20px;border-radius:10px}
-.dsp-lokal-title{background:#0f2d54;color:#60a5fa}
-.dsp-ekspor-title{background:#1a1a3e;color:#a78bfa}
-.dsp-nomor-e{color:#a78bfa;text-shadow:0 0 60px rgba(167,139,250,.5),0 0 120px rgba(167,139,250,.25)}
 @media(max-width:700px){
-  .dsp-cols{flex-direction:column}
-  .dsp-separator{width:80%;height:2px;min-height:0;background:linear-gradient(90deg,transparent,#1e3a5f,transparent);margin:24px auto}
 }
 
 /* ═══════ RUNNING TEXT (TICKER) ═══════ */
@@ -996,26 +942,10 @@ input,select,textarea{font-family:inherit}
 .form-status-bar.open{background:#dcfce7;color:#16a34a;border:1.5px solid #86efac}
 .form-status-bar.closed{background:#fee2e2;color:#dc2626;border:1.5px solid #fca5a5}
 
-.dsp-cols{display:flex;width:100%;max-width:1400px;gap:0;align-items:flex-start;margin-top:10px}
-.dsp-col{flex:1;display:flex;flex-direction:column;align-items:center;padding:0 30px}
-.dsp-col-sep{width:2px;background:linear-gradient(180deg,transparent,#1e3a5f 30%,#1e3a5f 70%,transparent);min-height:500px;flex-shrink:0;margin-top:40px}
-.dsp-col-badge{font-size:18px;font-weight:900;letter-spacing:3px;padding:8px 24px;border-radius:12px;margin-bottom:18px}
-.dsp-lokal-badge{background:rgba(37,99,235,.2);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
-.dsp-ekspor-badge{background:rgba(124,58,237,.2);color:#c084fc;border:1px solid rgba(192,132,252,.3)}
-.dsp-nomor-e{color:#c084fc;text-shadow:0 0 60px rgba(192,132,252,.4)}
 @media(max-width:700px){
-  .dsp-cols{flex-direction:column;align-items:center}
-  .dsp-col-sep{width:80%;height:2px;min-height:0;margin:16px 0;background:linear-gradient(90deg,transparent,#1e3a5f,transparent)}
 }
 
 /* Display redesign */
-.dsp-header-row{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:1400px;margin-bottom:24px}
-.dsp-dock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;width:100%;max-width:1400px;margin-bottom:24px}
-.dsp-dock-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;text-align:center;transition:all .3s}
-.dsp-dock-card.lokal{border-color:rgba(96,165,250,.4);background:rgba(37,99,235,.1)}
-.dsp-dock-card.ekspor{border-color:rgba(192,132,252,.4);background:rgba(124,58,237,.1)}
-.dsp-dock-card.finish{opacity:.7;border-style:dashed}
-.dsp-dock-card.mb{border-color:rgba(252,165,165,.4);background:rgba(220,38,38,.08)}
 .ddc-dock{font-size:13px;font-weight:700;letter-spacing:1px;margin-bottom:6px;opacity:.7}
 .ddc-nomor{font-size:36px;font-weight:900;letter-spacing:3px;margin-bottom:4px}
 .lokal .ddc-nomor{color:#60a5fa}
@@ -1024,15 +954,7 @@ input,select,textarea{font-family:inherit}
 .ddc-status{font-size:11px;font-weight:700;letter-spacing:1px;opacity:.6;text-transform:uppercase;margin-bottom:8px}
 .ddc-nopol{font-size:16px;font-weight:700;color:#e2e8f0;margin-bottom:2px}
 .ddc-info{font-size:12px;color:#64748b}
-.dsp-empty{font-size:20px;color:#334155;text-align:center;padding:40px;grid-column:1/-1}
 
-.dsp-waiting-section{width:100%;max-width:1400px;background:rgba(255,255,255,.03);border-radius:16px;border:1px solid rgba(255,255,255,.07);padding:16px 24px}
-.dsp-waiting-row{display:flex;gap:24px}
-.dsp-waiting-col{flex:1}
-.dsp-waiting-divider{width:1px;background:rgba(255,255,255,.08)}
-.dsp-waiting-title{font-size:13px;font-weight:700;letter-spacing:1px;color:#334155;text-transform:uppercase;margin-bottom:10px}
-.dsp-next-list{display:flex;flex-wrap:wrap;gap:8px}
-.dsp-next-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:6px 14px;border-radius:8px;font-size:16px;font-weight:800;color:#94a3b8}
 /* ── DOCK MANAGE MODAL ── */
 #dockManageModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center}
 #dockManageModal.open{display:flex}
@@ -1472,8 +1394,6 @@ input,select,textarea{font-family:inherit}
     <div class="form-footer">
       <a onclick="goOp()">Operator Login</a>
       &nbsp;·&nbsp;
-      <a onclick="showPage('display');startDisplay()">Layar Display</a>
-      &nbsp;·&nbsp;
       <a onclick="forceUpdate()">🔄 Update App</a>
     </div>
   </div>
@@ -1520,35 +1440,6 @@ input,select,textarea{font-family:inherit}
   </div>
 </div>
 
-<!-- ══ PAGE: DISPLAY ══════════════════════════════════════ -->
-<div id="page-display" class="page">
-  <!-- Banner aktifkan suara — muncul sampai user klik -->
-  <div id="dspSoundBanner" onclick="activateDisplaySound()" style="position:fixed;top:0;left:0;right:0;z-index:800;background:linear-gradient(135deg,#b91c1c,#dc2626);color:#fff;text-align:center;padding:14px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:.5px">
-    🔇 Klik di sini untuk mengaktifkan suara alarm
-  </div>
-  <div class="dsp-header-row" style="margin-top:52px">
-    <div class="dsp-gudang" id="dspGudang">GUDANG FINISHED GOODS</div>
-    <div class="dsp-time" id="dspTime">00:00</div>
-  </div>
-
-  <!-- Grid dock aktif -->
-  <div id="dspDockGrid" class="dsp-dock-grid"></div>
-
-  <!-- Antrian menunggu -->
-  <div class="dsp-waiting-section">
-    <div class="dsp-waiting-row">
-      <div class="dsp-waiting-col">
-        <div class="dsp-waiting-title">🏠 LOKAL — Antrian Berikutnya</div>
-        <div class="dsp-next-list" id="dspNextL">—</div>
-      </div>
-      <div class="dsp-waiting-divider"></div>
-      <div class="dsp-waiting-col">
-        <div class="dsp-waiting-title">🌏 EKSPOR — Antrian Berikutnya</div>
-        <div class="dsp-next-list" id="dspNextE">—</div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- ══ PAGE: OPERATOR ═════════════════════════════════════ -->
 <div id="page-operator" class="page">
@@ -1559,7 +1450,6 @@ input,select,textarea{font-family:inherit}
     </div>
     <div class="op-btns">
       <button class="btn-icon" onclick="goForm()">📝 Daftar Manual</button>
-      <button class="btn-icon" onclick="openDisplay()">📺 Layar</button>
       <button class="btn-icon" onclick="showQR()">📱 QR</button>
       <button class="btn-icon admin-only" style="display:none" onclick="openApprovalModal()">👤 Approval</button>
     <button class="btn-icon" onclick="goSettings()">⚙️</button>
@@ -1692,7 +1582,7 @@ var authed  = false;
 var _sessionToken = localStorage.getItem('session_token') || '';
 var _sessionRole  = '';
 var _sessionEmail = '';
-var dspInt  = null;
+
 var tikInt  = null;
 
 // ── INIT ─────────────────────────────────────────────────────
@@ -1706,8 +1596,6 @@ function init() {
   // Tampilkan page DULU, jangan tunggu API
   if (!GAS_URL || GAS_URL === 'GANTI_DENGAN_URL_WORKER_CLOUDFLARE') {
     showPage('setup');
-  } else if (hash === 'display') {
-    showPage('display'); startDisplay();
   } else if (hash === 'form') {
     // Form pendaftaran cuma bisa dibuka via link internal dashboard (goForm()),
     // bukan default -- tapi kalau ada yang buka #form langsung, tetap dilayani.
@@ -1755,7 +1643,6 @@ function loadSettings(cb) {
 function applySettings() {
   var nama = S.nama_gudang || 'Gudang Finished Goods';
   setText('namaGudangH', nama);
-  setText('dspGudang',   nama.toUpperCase());
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
@@ -1764,7 +1651,6 @@ function showPage(name) {
   var next    = document.getElementById('page-'+name);
   if (!next || current === next) return;
   location.hash = name;
-  if (dspInt && name !== 'display') { clearInterval(dspInt); dspInt = null; }
   if (tikInt && name !== 'tiket')   { clearInterval(tikInt); tikInt = null; }
   if (typeof _cdInt!=='undefined' && name !== 'status') { clearInterval(_cdInt); clearInterval(_statusInt); }
   if (current) {
@@ -1776,10 +1662,6 @@ function showPage(name) {
   } else {
     next.classList.add('active');
   }
-}
-
-function openDisplay() {
-  window.open(location.href.split('#')[0] + '#display', '_blank');
 }
 
 function goOp() {
@@ -2678,38 +2560,37 @@ function startOpAutoRefresh() {
   _opRefreshInt = setInterval(function() {
     var dfrom = document.getElementById('dateFrom');
     var dto   = document.getElementById('dateTo');
-    api({ action:'getAntrian', from: dfrom?dfrom.value:'', to: dto?dto.value:'', token:_sessionToken }, function(res) {
+    // Dulu ini 3 request berantai (getAntrian -> getDockStatus -> getDockManage),
+    // masing-masing 1x cold invocation GAS terpisah -- kerasa lambat tiap
+    // siklus refresh 30 detik. Sekarang 1 action gabungan (getDashboardData),
+    // 1x request, 1x buka spreadsheet di server.
+    api({ action:'getDashboardData', from: dfrom?dfrom.value:'', to: dto?dto.value:'', token:_sessionToken }, function(res) {
       if (res && res.success === false && res.error === 'Unauthorized') {
         toast('⚠️ Sesi login berakhir, silakan login ulang'); opLogout(); return;
       }
       if (!res || !res.list) return;
       _allList = res.list;
-      api({ action:'getDockStatus', token:_sessionToken }, function(ds) {
-        if (ds && ds.success && ds.docks) {
-          window._dockMap = {};
-          Object.keys(ds.docks).forEach(function(dk) {
-            window._dockMap[dk] = ds.docks[dk];
-            // MB_ keys → set dock='MB' di _allList
-            var dockVal = dk.indexOf('MB_')===0 ? 'MB' : dk.indexOf('ND_')===0 ? '' : dk;
-            for(var j=0;j<_allList.length;j++){
-              if(String(_allList[j].id)===String(ds.docks[dk].id)){ _allList[j].dock=dockVal; break; }
-            }
-          });
-        }
-        // Polling dock status (aktif/non-aktif) bersamaan
-        api({ action:'getDockManage', token:_sessionToken }, function(dm) {
-          if (dm && dm.success && dm.list) {
-            _dockStatusMap = {};
-            dm.list.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
+
+      if (res.docks) {
+        window._dockMap = {};
+        Object.keys(res.docks).forEach(function(dk) {
+          window._dockMap[dk] = res.docks[dk];
+          // MB_ keys → set dock='MB' di _allList
+          var dockVal = dk.indexOf('MB_')===0 ? 'MB' : dk.indexOf('ND_')===0 ? '' : dk;
+          for(var j=0;j<_allList.length;j++){
+            if(String(_allList[j].id)===String(res.docks[dk].id)){ _allList[j].dock=dockVal; break; }
           }
-          renderAllTabs(); renderCards();
-          if (_activeTab === 'DOCK') renderDockTab();
-          checkAlarms(_allList || []);
-        }, function(){
-          renderAllTabs(); renderCards();
-          checkAlarms(_allList || []);
         });
-      }, function(){});
+      }
+
+      if (res.dockManageList) {
+        _dockStatusMap = {};
+        res.dockManageList.forEach(function(d) { _dockStatusMap[String(d.dock)] = d; });
+      }
+
+      renderAllTabs(); renderCards();
+      if (_activeTab === 'DOCK') renderDockTab();
+      checkAlarms(_allList || []);
     }, function(){});
   }, 30000);
 }
@@ -4176,102 +4057,6 @@ function doReset() {
   );
 }
 
-// ── DISPLAY ───────────────────────────────────────────────────
-function startDisplay() {
-  doLoadDisplay();
-  dspInt=setInterval(doLoadDisplay,5000);
-  tickTime(); setInterval(tickTime,1000);
-}
-
-function activateDisplaySound() {
-  // Unlock AudioContext dengan user gesture
-  try {
-    var ctx = getAudioCtx();
-    if (ctx.state === 'suspended') ctx.resume();
-  } catch(e){}
-  // Test audio dengan suara kecil untuk konfirmasi aktif
-  speakText('Sistem siap', function(){});
-  // Sembunyikan banner
-  var banner = document.getElementById('dspSoundBanner');
-  if (banner) {
-    banner.style.background = 'linear-gradient(135deg,#065f46,#059669)';
-    banner.textContent = '🔔 Suara alarm aktif';
-    setTimeout(function(){
-      banner.style.display = 'none';
-      // Kembalikan margin-top header
-      var hdr = document.querySelector('#page-display .dsp-header-row');
-      if (hdr) hdr.style.marginTop = '';
-    }, 1500);
-  }
-  // Set alarm on
-  _alarmOn = true;
-  try { localStorage.setItem('alarm_on','1'); } catch(e){}
-  updateAlarmUI();
-}
-
-function doLoadDisplay() {
-  api({ action:'getAntrianPublic' }, renderDisplay, function(){});
-}
-
-function renderDisplay(res) {
-  var list = res.list || [];
-  window._allList = list; // sync ke _allList agar checkAlarms bisa akses status terkini
-  setText('dspGudang', ((S&&S.nama_gudang)||'GUDANG FINISHED GOODS').toUpperCase());
-
-  var active = ['START_LOADING','FINISH_LOADING'];
-  var activeTrucks = list.filter(function(r){ return active.indexOf(r.status)>=0; });
-
-  // Sort: dock number (MB last), then by status
-  activeTrucks.sort(function(a,b){
-    var da = String(a.dock||''), db = String(b.dock||'');
-    if (da.indexOf('MB')===0 && db.indexOf('MB')!==0) return 1;
-    if (db.indexOf('MB')===0 && da.indexOf('MB')!==0) return -1;
-    var na = parseInt(da)||99, nb = parseInt(db)||99;
-    return na - nb;
-  });
-
-  var grid = document.getElementById('dspDockGrid');
-  if (grid) {
-    if (!activeTrucks.length) {
-      grid.innerHTML = '<div class="dsp-empty">Tidak ada truck yang sedang diproses</div>';
-    } else {
-      grid.innerHTML = activeTrucks.map(function(r) {
-        var jn    = (r.jenis||'').toLowerCase();
-        var isMB  = String(r.dock||'').indexOf('MB')===0;
-        var cls   = isMB ? 'mb' : jn;
-        var fin   = r.status==='FINISH_LOADING' ? ' finish' : '';
-        var dockLbl = isMB ? '🚛 MUAT BAWAH' : (r.dock ? 'DOCK '+ r.dock : 'NO DOCK');
-        var stLbl = r.status==='START_LOADING' ? 'LOADING' : 'FINISH';
-        return '<div class="dsp-dock-card '+cls+fin+'">'+
-          '<div class="ddc-dock">'+dockLbl+'</div>'+
-          '<div class="ddc-nomor">'+esc(r.nomor||'—')+'</div>'+
-          '<div class="ddc-status">'+stLbl+'</div>'+
-          '<div class="ddc-nopol">'+esc(r.no_pol||'')+'</div>'+
-          '<div class="ddc-info">'+esc(r.jenis||'')+(r.tipe?' · '+esc(r.tipe):'')+(r.tujuan?' → '+esc(r.tujuan):'')+'</div>'+
-        '</div>';
-      }).join('');
-    }
-  }
-
-  // Antrian berikutnya per jenis
-  function nextList(jenis, elId) {
-    var next = list.filter(function(r){ return r.status==='ANTRIAN'&&(r.jenis||'').toUpperCase()===jenis; }).slice(0,8);
-    var el = document.getElementById(elId);
-    if (el) el.innerHTML = next.length
-      ? next.map(function(r){ return '<div class="dsp-next-item">'+r.nomor+'</div>'; }).join('')
-      : '<span style="color:#334155">—</span>';
-  }
-  nextList('LOKAL',  'dspNextL');
-  nextList('EKSPOR', 'dspNextE');
-  // Cek alarm RDC dari halaman display TV
-  if (typeof checkAlarms === 'function') checkAlarms(res.list || []);
-}
-
-function tickTime(){
-  var n=new Date();
-  setText('dspTime',pad(n.getHours())+':'+pad(n.getMinutes()));
-}
-
 // ── SETTINGS ──────────────────────────────────────────────────
 function loadSettingsForm() {
   document.getElementById('setNama').value   = S.nama_gudang    || '';
@@ -5085,6 +4870,15 @@ function toggleDetailEdit() {
         _editNamaBarangItems = parseNamaBarangItemsJS(r.nama_barang);
         renderNamaBarangItemsList();
         refreshAddControls(r.nodoc, r.tanggal, r.id);
+      } else {
+        // BUG FIX: sebelumnya variable ini nggak direset sama sekali kalau
+        // truk yang dibuka BUKAN EKSPOR -- jadi kalau sebelumnya operator
+        // sempat edit truk EKSPOR (isi _editNamaBarangItems), lalu tanpa
+        // refresh halaman buka edit truk LOKAL, sisa data EKSPOR tadi masih
+        // nyangkut di variable ini dan ikut ke-kirim pas Simpan (doEditData
+        // selalu nyertain nama_barang apapun jenisnya). Sekarang eksplisit
+        // dikosongin di sini, plus ada guard tambahan di doEditData().
+        _editNamaBarangItems = [];
       }
       _f('dEditHp',        r.no_hp);
       _f('dEditAlasan', '');
@@ -5125,13 +4919,22 @@ function doEditData() {
   var g = function(id){ var el=document.getElementById(id); return el ? el.value.trim() : ''; };
   var alasan = g('dEditAlasan');
   if (!alasan) { toast('⚠️ Alasan edit wajib diisi'); return; }
-  var namaBarangJson = JSON.stringify(_editNamaBarangItems.filter(function(it){ return it && it.sku; }));
-  api({ action:'editData', id:_editDetailId, token:_sessionToken,
+  // GUARD tambahan (di luar fix reset _editNamaBarangItems di atas): payload
+  // 'nama_barang' HANYA disertain kalau truk yang lagi diedit ini beneran
+  // EKSPOR. Kalau bukan, field ini di-skip total dari request -- jadi walau
+  // suatu saat ada state basi lain yang belum kepikiran, backend nggak akan
+  // pernah nerima nama_barang buat truk non-EKSPOR dari jalur form edit ini.
+  var _rEdit = window._cardMap && window._cardMap[_editDetailId];
+  var _isEkspEditSave = _rEdit && (_rEdit.jenis||'').toUpperCase() === 'EKSPOR';
+  var payload = { action:'editData', id:_editDetailId, token:_sessionToken,
         nama:g('dEditNama'), nopol:g('dEditNopol').toUpperCase(),
         eksp:g('dEditEksp'), nodoc:g('dEditNodoc'),
         qty:g('dEditQty'), tujuan:g('dEditTujuan'), tipe:g('dEditTipe'), no_container:g('dEditContainer'),
-        nama_barang:namaBarangJson, hp:g('dEditHp'),
-        alasan:alasan },
+        hp:g('dEditHp'), alasan:alasan };
+  if (_isEkspEditSave) {
+    payload.nama_barang = JSON.stringify(_editNamaBarangItems.filter(function(it){ return it && it.sku; }));
+  }
+  api(payload,
     function(res) {
       if (res.success) {
         toast('✅ Data berhasil diperbarui');
