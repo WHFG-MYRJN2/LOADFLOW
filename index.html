@@ -1631,13 +1631,27 @@ function api(params, cb, errCb) {
 }
 
 // ── SETTINGS ─────────────────────────────────────────────────
-function loadSettings(cb) {
+function loadSettings(cb, attempt) {
+  attempt = attempt || 1;
+  // Auto-retry sebelum nyerah: sebelumnya sekali gagal (sinyal lemah
+  // sesaat) langsung diam aja -- S tetap {} kosong, form Settings kelihatan
+  // "kosong" padahal itu bukan datanya yang emang kosong, itu GAGAL kebaca.
+  // Operator nggak tau itu gagal, jadi keliatannya random "kadang kosong",
+  // padahal itu network blip yang sebelumnya nggak pernah di-retry ataupun
+  // dikasih tau ke operator.
   api({ action:'getSettings' }, function(s) {
     S = s;
     applySettings();
     updateFormStatus();
     if (cb) cb();
-  }, function() { if (cb) cb(); });
+  }, function() {
+    if (attempt < 3) {
+      setTimeout(function(){ loadSettings(cb, attempt+1); }, 1500);
+      return;
+    }
+    toast('❌ Gagal memuat pengaturan, coba refresh halaman');
+    if (cb) cb();
+  });
 }
 
 function applySettings() {
@@ -1807,6 +1821,32 @@ function applyRoleUI() {
 function openApprovalModal() {
   document.getElementById('approvalModal').style.display = 'flex';
   loadPendingApprovals();
+  loadOnlineUsers();
+}
+
+// listOnlineUsers -- "kemungkinan" masih buka dashboard sekarang (bukan
+// koneksi real-time beneran, sistem ini stateless -- akurasinya seakurat
+// siklus auto-refresh dashboard, ~30 detik, jadi bisa telat dikit dari
+// kondisi asli).
+function loadOnlineUsers() {
+  var el = document.getElementById('onlineUsersList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:10px 0;font-size:12px">Memuat...</div>';
+  api({ action:'listOnlineUsers', token:_sessionToken }, function(res) {
+    if (!res || !res.success) { el.innerHTML = '<div style="text-align:center;color:#ef4444;padding:10px 0;font-size:12px">Gagal memuat</div>'; return; }
+    if (!res.list.length) { el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:10px 0;font-size:12px">Tidak ada yang online</div>'; return; }
+    el.innerHTML = res.list.map(function(u) {
+      var mnt = Math.floor(u.detikLalu/60);
+      var lastSeenLabel = u.detikLalu < 60 ? 'aktif barusan' : ('terakhir aktif ~'+mnt+' menit lalu');
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">'+
+        '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0"></span>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-weight:600;font-size:12px">'+esc(u.nama||u.email)+' <span style="font-weight:400;color:#94a3b8">('+esc(u.role)+')</span></div>'+
+          '<div style="font-size:10px;color:#94a3b8">'+esc(u.email)+' · '+lastSeenLabel+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }, function() { el.innerHTML = '<div style="text-align:center;color:#ef4444;padding:10px 0;font-size:12px">Koneksi gagal</div>'; });
 }
 function closeApprovalModal() {
   document.getElementById('approvalModal').style.display = 'none';
@@ -1984,7 +2024,8 @@ function refreshAddControlsCurrent() {
 
 // Cek planning buat SO ini, tentukan mode tambah item: dari planning (kalau SO
 // ketemu) atau cari manual dari STD (kalau SO SAMA SEKALI nggak ketemu).
-function refreshAddControls(nodoc, tanggal, truckId) {
+function refreshAddControls(nodoc, tanggal, truckId, attempt) {
+  attempt = attempt || 1;
   _lastAddControlsCtx = { nodoc:nodoc, tanggal:tanggal, truckId:truckId };
   var planWrap   = document.getElementById('dAddFromPlanningWrap');
   var manualWrap = document.getElementById('dAddManualWrap');
@@ -1993,6 +2034,11 @@ function refreshAddControls(nodoc, tanggal, truckId) {
   if (!nodoc) { planWrap.style.display='none'; manualWrap.style.display='none'; return; }
 
   var week = getISOWeek(tanggal);
+  // errCb sebelumnya nggak ada sama sekali -- kalau request ini gagal
+  // (sinyal lemah sesaat), dropdown "Tambah dari Planning" diam aja nggak
+  // keisi, tanpa tanda apapun kalau itu gagal. Operator ngirain barangnya
+  // emang kosong, padahal itu gagal fetch -- makanya "kadang muncul kadang
+  // nggak, harus refresh dulu". Sekarang auto-retry dulu sebelum nyerah.
   api({ action:'getBarangByNoDoc', nodoc:nodoc, week:week, excludeId:truckId||'', token:_sessionToken }, function(res) {
     if (res && res.success && res.notFound) {
       // SO nggak ketemu sama sekali di planning -> mode manual (STD)
@@ -2013,6 +2059,13 @@ function refreshAddControls(nodoc, tanggal, truckId) {
       opt.textContent = b.sku + ' — ' + b.nama + ' (' + b.qty + ' krt)';
       sel.appendChild(opt);
     });
+  }, function() {
+    if (attempt < 3) {
+      setTimeout(function(){ refreshAddControls(nodoc, tanggal, truckId, attempt+1); }, 1500);
+      return;
+    }
+    sel.innerHTML = '<option value="">— Gagal memuat, coba lagi —</option>';
+    toast('❌ Gagal memuat daftar barang, coba tutup & buka lagi');
   });
 }
 function addItemFromPlanning() {
@@ -2470,7 +2523,7 @@ function showTiket(data) {
   setText('tiketWaktu',    'Waktu daftar: '+data.waktu+' WIB');
 
   // No doc (tampil kalau ada)
-  var tirDoc = document.getElementById('tirNoDoc');
+  var tirDoc = document.getElementById('tiketNoDocRow');
   if(data.nodoc){ setText('tiketNoDoc',data.nodoc); if(tirDoc) tirDoc.style.display=''; }
   else { if(tirDoc) tirDoc.style.display='none'; }
 
@@ -2480,8 +2533,8 @@ function showTiket(data) {
   else { if(tirQty) tirQty.style.display='none'; }
 
   // Tipe: tampil hanya kalau LOKAL dan ada nilai
-  var tirTipe   = document.getElementById('tirTipe');
-  var tirTujuan = document.getElementById('tirTujuan');
+  var tirTipe   = document.getElementById('tiketTipeRow');
+  var tirTujuan = document.getElementById('tiketTujuanRow');
   if(data.tipe && data.jenis !== 'EKSPOR'){ setText('tiketTipe',data.tipe); if(tirTipe) tirTipe.style.display=''; }
   else { if(tirTipe) tirTipe.style.display='none'; }
   if(data.tujuan){ setText('tiketTujuan',data.tujuan); if(tirTujuan) tirTujuan.style.display=''; }
@@ -2525,6 +2578,8 @@ function showTiketGandeng(res1, res2) {
 
 function loadTiketStatus() {
   if (!tiketId) return;
+  // errCb DIAM (no-op) sengaja: polling background tiap 8 detik, bukan aksi
+  // yang ditunggu hasilnya -- gangguan sesaat nggak perlu munculin alarm.
   api({ action:'getAntrianById', id:tiketId }, function(res) {
     if (!res||!res.success) return;
     setText('tiketSedang', res.sedangDilayani||'—');
@@ -2535,7 +2590,7 @@ function loadTiketStatus() {
       else if (st==='SELESAI') { setText('tiketPosisi','✅ Sudah selesai dilayani'); el.style.color=''; }
       else { setText('tiketPosisi', pos<=1?'⏳ Anda berikutnya!':pos+' antrian di depan Anda'); el.style.color=''; }
     }
-  });
+  }, function(){ /* diamkan -- lihat catatan di atas */ });
 }
 
 // ── OPERATOR ─────────────────────────────────────────────────
@@ -4150,7 +4205,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.3.0';
+var APP_VERSION = 'LOADFLOW-v1.5.2';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -4753,6 +4808,8 @@ function openStatusPage(id) {
 
 function loadStatusPage() {
   if (!_statusId) return;
+  // Sama kayak loadTiketStatus() -- polling background tiap 10 detik,
+  // errCb diam-diam biar gangguan sesaat nggak munculin toast alarm.
   api({ action:'getAntrianById', id:_statusId }, function(res) {
     if (!res || !res.success || !res.data) {
       document.getElementById('statusContent').innerHTML =
@@ -4761,7 +4818,7 @@ function loadStatusPage() {
       return;
     }
     renderStatusPage(res.data, res.sedangDilayani);
-  });
+  }, function(){ /* diamkan -- lihat catatan di atas */ });
 }
 
 function renderStatusPage(r, sedangDilayani) {
@@ -4974,7 +5031,31 @@ function doEditData() {
       } else {
         toast('❌ ' + (res.error || 'Gagal menyimpan'));
       }
-    });
+    },
+    // errCb sebelumnya nggak ada -- jatuh ke fallback generic api() (toast
+    // "Koneksi gagal" doang, tanpa retry). editData() di backend AMAN
+    // diulang (dia nge-update field berdasarkan ID, bukan nambah baris baru
+    // kayak ambilAntrian), jadi auto-retry di sini nggak berisiko dobel.
+    function() { doEditDataRetry(payload, 1); }
+  );
+}
+
+function doEditDataRetry(payload, attempt) {
+  if (attempt >= 3) { toast('❌ Gagal menyimpan setelah beberapa kali percobaan, coba lagi manual'); return; }
+  setTimeout(function() {
+    api(payload,
+      function(res) {
+        if (res.success) {
+          toast('✅ Data berhasil diperbarui');
+          refreshOp();
+          document.getElementById('detailModal').style.display = 'none';
+        } else {
+          toast('❌ ' + (res.error || 'Gagal menyimpan'));
+        }
+      },
+      function() { doEditDataRetry(payload, attempt+1); }
+    );
+  }, 1500);
 }
 
 function doDeleteMobil() {
@@ -5401,7 +5482,14 @@ function buildAlarmMsg(r, level) {
   var hrs    = Math.floor(getElapsedHours(r));
   var mnt    = Math.floor((getElapsedHours(r) - hrs) * 60);
   var tujuan = r.tujuan ? 'tujuan ' + r.tujuan + ', ' : '';
-  var nopol  = r.no_pol ? r.no_pol + ', ' : '';
+  // No.pol dieja per-karakter (dipisah strip) biar TTS baca satu-satu ("A-
+  // dua-dua-dua-dua-B-C"), BUKAN gabung jadi 1 angka besar ("dua ribu dua
+  // ratus dua puluh dua"). Sebelumnya no.pol dikirim mentah ke TTS, jadi
+  // urutan angka berulang (kayak "2222") kebaca sebagai bilangan, bukan
+  // nomor plat -- bikin operator/sopir salah denger. Strip dipilih (bukan
+  // spasi) karena jeda antar karakternya kedengeran lebih natural, nggak
+  // selambat kalau dipisah spasi biasa.
+  var nopolSpeech = r.no_pol ? String(r.no_pol).replace(/\s+/g,'').split('').join('-') + ', ' : '';
   var statusMsg = {
     'ANTRIAN'       : 'masih menunggu antrian. segera dimuat!',
     'MENUNGGU_SPM'  : 'masih menunggu dokumen. segera dimuat!',
@@ -5412,9 +5500,9 @@ function buildAlarmMsg(r, level) {
   var durasi = hrs + ' jam ' + mnt + ' menit';
 
   if (level === 'urgent')
-    return 'Darurat! Truk ' + r.nomor + ', ' + (r.nama||'') + ', ' + nopol + tujuan +
+    return 'Darurat! Truk ' + r.nomor + ', ' + (r.nama||'') + ', ' + nopolSpeech + tujuan +
            'sudah ' + durasi + ', ' + statusMsg ;
-  return 'Peringatan! Truk ' + r.nomor + ', ' + (r.nama||'') + ', ' + nopol + tujuan +
+  return 'Peringatan! Truk ' + r.nomor + ', ' + (r.nama||'') + ', ' + nopolSpeech + tujuan +
          'sudah ' + durasi + ', ' + statusMsg ;
 }
 
@@ -5667,6 +5755,13 @@ initSW();
     <p style="text-align:center;color:#64748b;font-size:12px">Akun yang minta akses login Google, menunggu di-approve</p>
     <div id="approvalList" style="max-height:360px;overflow-y:auto;margin:14px 0">
       <div style="text-align:center;color:#94a3b8;padding:20px 0">Memuat...</div>
+    </div>
+    <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-top:4px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">🟢 Sedang Online</div>
+      <div style="font-size:10px;color:#94a3b8;margin-bottom:8px">Estimasi berdasarkan aktivitas ~30 detik terakhir, bukan status koneksi real-time</div>
+      <div id="onlineUsersList" style="max-height:200px;overflow-y:auto">
+        <div style="text-align:center;color:#94a3b8;padding:10px 0;font-size:12px">Memuat...</div>
+      </div>
     </div>
     <button class="btn-back" onclick="closeApprovalModal()">Tutup</button>
   </div>
