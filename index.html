@@ -1939,6 +1939,42 @@ function loadBarangInfo(noDoc, tanggal, elId, excludeId) {
   });
 }
 
+// loadBarangInfoLokal() -- sama persis pola-nya kayak loadBarangInfo() di
+// atas (preview item hasil match planning, clickable buat cek posisi FIFO +
+// cetak picking list), tapi buat truk LOKAL RDC/SUBDIST, sumbernya
+// getBarangLokalByNoDoc() (bukan getBarangByNoDoc yang khusus PLANNING_EKSPOR).
+// Dipanggil dari showBarangInfo() begitu nama_barang truk masih kosong --
+// jadi Nama Barang hasil planning kelihatan LANGSUNG di mode lihat, operator
+// nggak perlu buka Edit dulu buat lihatnya. Klik item tetap cuma preview +
+// cek lokasi -- belum ke-simpan ke nama_barang truk sampai operator beneran
+// buka Edit & Simpan.
+function loadBarangInfoLokal(noDoc, tipe, elId, excludeId) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  if (!noDoc) { el.innerHTML = '<div class="barang-loading">—</div>'; return; }
+  el.innerHTML = '<div class="barang-loading">Memuat...</div>';
+  api({ action:'getBarangLokalByNoDoc', tipe:tipe||'', nodoc:noDoc, token:_sessionToken }, function(res) {
+    if (!res || !res.success || !res.list || !res.list.length) {
+      el.innerHTML = '<div class="barang-loading">Nama Barang belum diisi &amp; No.Dokumen tidak ketemu di planning — buka Edit buat isi manual</div>';
+      return;
+    }
+    el.innerHTML = res.list.map(function(b) {
+      return '<div class="barang-box clickable" data-sku="'+esc(b.sku)+'" data-nama="'+esc(b.nama)+'" data-qty="'+esc(b.qty)+'" data-truckid="'+esc(excludeId||'')+'">'+
+        '<div class="barang-sku">'+esc(b.sku)+'</div>'+
+        '<div class="barang-nama">'+esc(b.nama)+'</div>'+
+        '<div class="barang-qty">'+esc(b.qty)+' krt &rsaquo;</div>'+
+      '</div>';
+    }).join('');
+    el.querySelectorAll('.barang-box.clickable').forEach(function(box) {
+      box.addEventListener('click', function() {
+        showPosisiBarang(box.dataset.sku, box.dataset.nama, box.dataset.qty, elId, box.dataset.truckid);
+      });
+    });
+  }, function() {
+    el.innerHTML = '<div class="barang-loading">Gagal memuat</div>';
+  });
+}
+
 // loadBarangReferensi() -- KHUSUS truk EKSPOR yang UDAH KELUAR tapi Nama
 // Barang-nya kosong. Nampilin hasil cari-ulang ke PLANNING_EKSPOR berdasar
 // No.Dokumen, MURNI SEBAGAI REFERENSI -- tidak clickable, tidak ngunci
@@ -2218,12 +2254,11 @@ function showBarangInfo(r) {
       return;
     }
     if (isLokalPlannedR) {
-      // LOKAL (RDC/SUBDIST) TIDAK pakai getBarangByNoDoc (itu khusus
-      // PLANNING_EKSPOR) -- kalau nama_barang masih kosong di sini, artinya
-      // waktu truk ini diedit terakhir kali, planning-nya emang nggak
-      // ketemu (atau belum pernah dibuka editnya sama sekali). Cukup
-      // arahkan ke Edit, jangan nebak-nebak manggil endpoint yang salah.
-      el.innerHTML = '<div class="barang-loading">Nama Barang belum diisi — buka Edit buat isi otomatis dari planning</div>';
+      // LOKAL (RDC/SUBDIST): tampilin LANGSUNG preview hasil match planning
+      // di mode lihat juga (nggak perlu buka Edit dulu), sumbernya
+      // getBarangLokalByNoDoc() -- BEDA dari EKSPOR yang pakai getBarangByNoDoc
+      // (itu khusus PLANNING_EKSPOR, sumbernya salah kalau dipakai di sini).
+      loadBarangInfoLokal(r.nodoc, r.tipe, 'dBarangInfo', r.id);
       return;
     }
     el.innerHTML = '<div class="barang-loading">—</div>';
@@ -4381,7 +4416,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.2.4';
+var APP_VERSION = 'LOADFLOW-v1.2.5';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
