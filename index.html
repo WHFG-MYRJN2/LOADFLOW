@@ -1948,7 +1948,13 @@ function loadBarangInfo(noDoc, tanggal, elId, excludeId) {
 // nggak perlu buka Edit dulu buat lihatnya. Klik item tetap cuma preview +
 // cek lokasi -- belum ke-simpan ke nama_barang truk sampai operator beneran
 // buka Edit & Simpan.
-function loadBarangInfoLokal(noDoc, tipe, elId, excludeId) {
+// attempt: sebelumnya sekali gagal (sinyal lemah sesaat, atau spreadsheet
+// lain lambat dibuka) langsung nampilin "Gagal memuat" tanpa dicoba ulang
+// sama sekali -- beda dari refreshAddControlsLokal (mode Edit) yang udah
+// retry 3x. Disamain sekarang biar preview di kartu (mode lihat) nggak
+// gampang nyerah cuma gara-gara 1x network blip.
+function loadBarangInfoLokal(noDoc, tipe, elId, excludeId, attempt) {
+  attempt = attempt || 1;
   var el = document.getElementById(elId);
   if (!el) return;
   if (!noDoc) { el.innerHTML = '<div class="barang-loading">—</div>'; return; }
@@ -1971,7 +1977,11 @@ function loadBarangInfoLokal(noDoc, tipe, elId, excludeId) {
       });
     });
   }, function() {
-    el.innerHTML = '<div class="barang-loading">Gagal memuat</div>';
+    if (attempt < 3) {
+      setTimeout(function(){ loadBarangInfoLokal(noDoc, tipe, elId, excludeId, attempt+1); }, 1500);
+      return;
+    }
+    el.innerHTML = '<div class="barang-loading">Gagal memuat — coba tutup &amp; buka lagi kartunya</div>';
   });
 }
 
@@ -2149,8 +2159,15 @@ function refreshAddControls(nodoc, tanggal, truckId, attempt) {
       setTimeout(function(){ refreshAddControls(nodoc, tanggal, truckId, attempt+1); }, 1500);
       return;
     }
-    sel.innerHTML = '<option value="">— Gagal memuat, coba lagi —</option>';
-    toast('❌ Gagal memuat daftar barang, coba tutup & buka lagi');
+    // Gagal total (3x) -- JANGAN biarin planWrap & manualWrap dua-duanya
+    // ketutup, soalnya defaultnya emang display:none berdua. Kalau
+    // dibiarin, operator nggak punya cara pilih barang SAMA SEKALI walau
+    // cuma gara-gara network blip sesaat. Fallback ke cari manual (STD)
+    // sebagai jalan keluar sementara.
+    planWrap.style.display = 'none';
+    manualWrap.style.display = '';
+    loadStdList();
+    toast('❌ Gagal memuat dari planning — sementara pakai cari manual, atau tutup & buka lagi buat coba ulang');
   });
 }
 function addItemFromPlanning() {
@@ -2203,8 +2220,14 @@ function refreshAddControlsLokal(nodoc, tipe, truckId, attempt) {
       setTimeout(function(){ refreshAddControlsLokal(nodoc, tipe, truckId, attempt+1); }, 1500);
       return;
     }
-    sel.innerHTML = '<option value="">— Gagal memuat, coba lagi —</option>';
-    toast('❌ Gagal memuat daftar barang, coba tutup & buka lagi');
+    // Sama kayak refreshAddControls (EKSPOR) -- gagal total (3x) jangan
+    // biarin planWrap & manualWrap dua-duanya ketutup. Ini persis bug yang
+    // bikin operator "gaada buat milih jenis barang" pas fetch planning-nya
+    // gagal. Fallback ke cari manual (STD).
+    planWrap.style.display = 'none';
+    manualWrap.style.display = '';
+    loadStdList();
+    toast('❌ Gagal memuat dari planning — sementara pakai cari manual, atau tutup & buka lagi buat coba ulang');
   });
 }
 
@@ -4416,7 +4439,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.2.5';
+var APP_VERSION = 'LOADFLOW-v2.2.6';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
