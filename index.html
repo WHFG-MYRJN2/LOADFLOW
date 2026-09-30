@@ -2380,7 +2380,15 @@ function refreshPosisiBarang(sku, nama, qty, elId, truckId) {
   }, function() { toast('❌ Koneksi gagal'); });
 }
 
-function showPosisiBarang(sku, nama, qty, elId, truckId) {
+// attempt: sebelumnya sekali gagal (sinyal lemah/spreadsheet BinLoc lambat
+// dibuka) langsung nampilin "Koneksi gagal" tanpa dicoba ulang -- makanya
+// kerasa "suka koneksi gagal" padahal seringnya cuma network blip sesaat.
+// Aman di-retry soalnya getPosisiBarangFIFO SENGAJA didesain idempotent:
+// kalau truk ini udah pernah kunci lokasi buat SKU ini sebelumnya (baris
+// POSISI_BARANG udah keisi), dia langsung pakai yang lama, BUKAN ngitung &
+// ngunci ulang -- jadi retry nggak bikin dobel alokasi stok.
+function showPosisiBarang(sku, nama, qty, elId, truckId, attempt) {
+  attempt = attempt || 1;
   var el = document.getElementById(elId);
 
   if (!el) return;
@@ -2424,7 +2432,11 @@ function showPosisiBarang(sku, nama, qty, elId, truckId) {
     }
     el.innerHTML = html;
   }, function() {
-    el.innerHTML = '<div class="barang-loading">Koneksi gagal</div>';
+    if (attempt < 3) {
+      setTimeout(function(){ showPosisiBarang(sku, nama, qty, elId, truckId, attempt+1); }, 1500);
+      return;
+    }
+    el.innerHTML = '<div class="barang-loading">Koneksi gagal — <a href="#" onclick="showPosisiBarang(\''+esc(sku)+'\',\''+esc(nama).replace(/'/g,"\\'")+'\','+qty+',\''+elId+'\',\''+(truckId||'')+'\');return false;">coba lagi</a></div>';
   });
 }
 
@@ -4439,7 +4451,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.2.6';
+var APP_VERSION = 'LOADFLOW-v2.2.7';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
