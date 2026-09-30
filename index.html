@@ -2051,16 +2051,31 @@ function removeNamaBarangItem(idx) {
   renderNamaBarangItemsList();
   refreshAddControlsCurrent();
 }
-var _lastAddControlsCtx = null; // {nodoc, tanggal, truckId} buat refresh ulang setelah tambah/hapus item
+// {mode:'EKSPOR', nodoc, tanggal, truckId} atau {mode:'LOKAL', nodoc, tipe, truckId}
+// -- dipakai refreshAddControlsCurrent() buat tau harus refresh ulang lewat
+// jalur EKSPOR (PLANNING_EKSPOR) atau LOKAL (LK RDC / RESERVED DIRECT DETAIL).
+var _lastAddControlsCtx = null;
 function refreshAddControlsCurrent() {
-  if (_lastAddControlsCtx) refreshAddControls(_lastAddControlsCtx.nodoc, _lastAddControlsCtx.tanggal, _lastAddControlsCtx.truckId);
+  if (!_lastAddControlsCtx) return;
+  if (_lastAddControlsCtx.mode === 'LOKAL') {
+    refreshAddControlsLokal(_lastAddControlsCtx.nodoc, _lastAddControlsCtx.tipe, _lastAddControlsCtx.truckId);
+  } else {
+    refreshAddControls(_lastAddControlsCtx.nodoc, _lastAddControlsCtx.tanggal, _lastAddControlsCtx.truckId);
+  }
+}
+
+// TIPE truk LOKAL yang punya sumber planning otomatis. Dicek pakai "mengandung
+// RDC" (bukan exact match) karena nilai dropdown aslinya "LUAR KOTA (RDC)".
+function isLokalPlannedTipe(tipe) {
+  var t = String(tipe||'').toUpperCase();
+  return t.indexOf('RDC') >= 0 || t === 'SUBDIST';
 }
 
 // Cek planning buat SO ini, tentukan mode tambah item: dari planning (kalau SO
 // ketemu) atau cari manual dari STD (kalau SO SAMA SEKALI nggak ketemu).
 function refreshAddControls(nodoc, tanggal, truckId, attempt) {
   attempt = attempt || 1;
-  _lastAddControlsCtx = { nodoc:nodoc, tanggal:tanggal, truckId:truckId };
+  _lastAddControlsCtx = { mode:'EKSPOR', nodoc:nodoc, tanggal:tanggal, truckId:truckId };
   var planWrap   = document.getElementById('dAddFromPlanningWrap');
   var manualWrap = document.getElementById('dAddManualWrap');
   var sel        = document.getElementById('dAddFromPlanning');
@@ -2112,12 +2127,79 @@ function addItemFromPlanning() {
   sel.value = '';
 }
 
+// ── LOKAL (RDC/SUBDIST): "Tambah dari Planning" dari LK RDC / RESERVED
+// DIRECT DETAIL, dicari pakai No.Dokumen truk + TIPE. Beda dari EKSPOR:
+// nggak ada konsep slot/kunci alokasi di sini, jadi dropdown-nya nampilin
+// SEMUA hasil match yang belum ada di list lokal (already-filter di bawah
+// udah generic, jalan sama persis kayak versi EKSPOR).
+function refreshAddControlsLokal(nodoc, tipe, truckId, attempt) {
+  attempt = attempt || 1;
+  _lastAddControlsCtx = { mode:'LOKAL', nodoc:nodoc, tipe:tipe, truckId:truckId };
+  var planWrap   = document.getElementById('dAddFromPlanningWrap');
+  var manualWrap = document.getElementById('dAddManualWrap');
+  var sel        = document.getElementById('dAddFromPlanning');
+  if (!planWrap || !manualWrap || !sel) return;
+  if (!nodoc) { planWrap.style.display='none'; manualWrap.style.display='none'; return; }
+
+  api({ action:'getBarangLokalByNoDoc', tipe:tipe||'', nodoc:nodoc, token:_sessionToken }, function(res) {
+    if (res && res.success && res.notFound) {
+      // No.Dokumen nggak ketemu di LK RDC / RESERVED DIRECT DETAIL -> mode
+      // manual (STD), sama kayak jalur EKSPOR kalau SO-nya nggak ketemu.
+      planWrap.style.display = 'none';
+      manualWrap.style.display = '';
+      loadStdList();
+      return;
+    }
+    manualWrap.style.display = 'none';
+    planWrap.style.display = '';
+    var already = _editNamaBarangItems.map(function(it){ return String(it.sku||'').trim().toUpperCase(); });
+    sel.innerHTML = '<option value="">— Tambah dari Planning —</option>';
+    (res && res.list ? res.list : []).forEach(function(b, i) {
+      if (already.indexOf(String(b.sku).trim().toUpperCase()) >= 0) return; // sudah ada di list lokal
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.dataset.sku = b.sku; opt.dataset.nama = b.nama; opt.dataset.qty = b.qty;
+      opt.textContent = b.sku + ' — ' + b.nama + (b.qty !== '' && b.qty !== undefined ? ' (' + b.qty + ' krt)' : '');
+      sel.appendChild(opt);
+    });
+  }, function() {
+    if (attempt < 3) {
+      setTimeout(function(){ refreshAddControlsLokal(nodoc, tipe, truckId, attempt+1); }, 1500);
+      return;
+    }
+    sel.innerHTML = '<option value="">— Gagal memuat, coba lagi —</option>';
+    toast('❌ Gagal memuat daftar barang, coba tutup & buka lagi');
+  });
+}
+
+// Dipanggil sekali pas modal edit truk LOKAL (RDC/SUBDIST) dibuka DAN
+// nama_barang-nya masih kosong (truk belum pernah diisi manual) -- auto isi
+// SEMUA item yang match dari planning, operator tinggal hapus yang salah
+// atau tambah lagi dari dropdown "Tambah dari Planning" kalau kurang.
+// Kalau nama_barang UDAH ada isinya (pernah disimpan/diedit sebelumnya),
+// fungsi ini TIDAK dipanggil -- data hasil edit manual operator sebelumnya
+// nggak boleh ketiban/ketimpa auto-fetch ulang setiap kali modal dibuka.
+function autoFillLokalFromPlanning(nodoc, tipe, truckId) {
+  if (!nodoc) { refreshAddControlsLokal(nodoc, tipe, truckId); return; }
+  api({ action:'getBarangLokalByNoDoc', tipe:tipe||'', nodoc:nodoc, token:_sessionToken }, function(res) {
+    if (res && res.success && res.list && res.list.length) {
+      _editNamaBarangItems = res.list.map(function(it){ return { sku:it.sku, nama:it.nama, qty:it.qty }; });
+      renderNamaBarangItemsList();
+    }
+    refreshAddControlsLokal(nodoc, tipe, truckId);
+  }, function() {
+    refreshAddControlsLokal(nodoc, tipe, truckId);
+  });
+}
+
 // ── Tampilan card "Nama Barang" (dGrid, bukan mode edit) ──
 // Render LIST semua item truk ini; tiap item bisa diklik buat lihat lokasi FIFO.
 function showBarangInfo(r) {
   if (!r || !r.nodoc) return;
   var el = document.getElementById('dBarangInfo');
   if (!el) return;
+  var isEksporR = (r.jenis||'').toUpperCase() === 'EKSPOR';
+  var isLokalPlannedR = !isEksporR && isLokalPlannedTipe(r.tipe);
   var items = parseNamaBarangItemsJS(r.nama_barang);
   if (!items.length) {
     // Truk EKSPOR yang UDAH KELUAR tapi Nama Barang-nya kosong (operator
@@ -2127,11 +2209,24 @@ function showBarangInfo(r) {
     // proses muat -- nggak relevan sama sekali buat truk yang udah pergi,
     // nggak ada lagi yang perlu di-pick. Di sini cuma nampilin REFERENSI
     // dari planning (baca-baca doang, nggak nulis apapun ke sheet).
-    if (r.status === 'KELUAR' && (r.jenis||'').toUpperCase() === 'EKSPOR') {
+    if (isEksporR && r.status === 'KELUAR') {
       loadBarangReferensi(r.nodoc, r.tanggal, 'dBarangInfo');
       return;
     }
-    loadBarangInfo(r.nodoc, r.tanggal, 'dBarangInfo', r.id);
+    if (isEksporR) {
+      loadBarangInfo(r.nodoc, r.tanggal, 'dBarangInfo', r.id);
+      return;
+    }
+    if (isLokalPlannedR) {
+      // LOKAL (RDC/SUBDIST) TIDAK pakai getBarangByNoDoc (itu khusus
+      // PLANNING_EKSPOR) -- kalau nama_barang masih kosong di sini, artinya
+      // waktu truk ini diedit terakhir kali, planning-nya emang nggak
+      // ketemu (atau belum pernah dibuka editnya sama sekali). Cukup
+      // arahkan ke Edit, jangan nebak-nebak manggil endpoint yang salah.
+      el.innerHTML = '<div class="barang-loading">Nama Barang belum diisi — buka Edit buat isi otomatis dari planning</div>';
+      return;
+    }
+    el.innerHTML = '<div class="barang-loading">—</div>';
     return;
   }
 
@@ -3851,6 +3946,28 @@ function renderAnalisis() {
   var _anFrom = _dfFrom ? _dfFrom.value : '2026-06-01';
   var _anTo   = _dfTo   ? _dfTo.value   : '';
   var startDate = _anFrom || '2026-06-01';
+  // BUG FIX: seluruh view Analisis (termasuk input tanggal/week & tombol mode)
+  // di-rebuild dari nol tiap kali renderAnalisis() dipanggil -- yang kejadian
+  // BUKAN cuma pas klik "Tampilkan", tapi juga tiap klik pill Kategori
+  // (Semua/Ekspor/RDC/Subdist) & pill "Tampilkan" (Per Jam/Hari/Bulan/Tahun),
+  // soalnya semua pill itu juga manggil renderAnalisis(). Sebelumnya input
+  // tanggal & week ditulis ulang pakai NILAI DEFAULT HARDCODE (2026-06-01 s/d
+  // hari ini), bukan nilai yang lagi aktif dipilih user -- makanya kelihatan
+  // "ganti sendiri" tiap pindah filter. Sama juga tab Week vs Tanggal ikut
+  // balik ke "Tanggal" terus. Di bawah ini nangkep dulu SEMUA state yang lagi
+  // aktif SEBELUM elemennya dihancurkan (el.innerHTML='' di bawah), biar bisa
+  // dipasang balik pas dibangun ulang.
+  var _dfWeekFrom = document.getElementById('anWeekFrom');
+  var _dfWeekTo   = document.getElementById('anWeekTo');
+  var _dfWeekYear = document.getElementById('anWeekYear');
+  var _anWeekFromVal = _dfWeekFrom ? _dfWeekFrom.value : '';
+  var _anWeekToVal   = _dfWeekTo   ? _dfWeekTo.value   : '';
+  var _anWeekYearVal = _dfWeekYear && _dfWeekYear.value ? _dfWeekYear.value : String((new Date()).getFullYear());
+  var _prevModeWeekBtn = document.getElementById('anModeWeek');
+  var _anActiveMode = (_prevModeWeekBtn && _prevModeWeekBtn.className === 'active') ? 'week' : 'date';
+  var _prevRangeInfo = document.getElementById('anRangeInfo');
+  var _anRangeInfoText   = _prevRangeInfo ? _prevRangeInfo.textContent : '';
+  var _anRangeInfoShown  = !!(_prevRangeInfo && _prevRangeInfo.style.display !== 'none');
   var allData = (_anData||[]).filter(function(r){
     var t = r.tanggal||'';
     if(_anFrom && t < _anFrom) return false;
@@ -3894,26 +4011,34 @@ function renderAnalisis() {
     var btWeek = document.createElement('button'); btWeek.textContent='Week'; btWeek.id='anModeWeek';
     tog.appendChild(btDate); tog.appendChild(btWeek); rg.appendChild(tog);
 
-    // Date inputs
+    // Date inputs -- pakai _anFrom/_anTo yang udah ditangkep di atas (bukan
+    // hardcode) biar nilainya nggak ke-reset tiap renderAnalisis() dipanggil
+    // ulang gara-gara ganti filter Kategori/Tampilkan.
     var dateRow = document.createElement('div'); dateRow.className='an-range-row'; dateRow.id='anDateRow';
-    dateRow.innerHTML='<input type="date" id="anDateFrom" class="an-range-input" value="2026-06-01">'+
+    dateRow.innerHTML='<input type="date" id="anDateFrom" class="an-range-input" value="'+esc(_anFrom||'2026-06-01')+'">'+
       '<span style="color:#94a3b8;font-size:11px">s/d</span>'+
-      '<input type="date" id="anDateTo" class="an-range-input" value="'+(function(){var n=new Date();return n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);})()+'">'+
+      '<input type="date" id="anDateTo" class="an-range-input" value="'+esc(_anTo||(function(){var n=new Date();return n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);})())+'">'+
       '<button class="an-range-btn" onclick="fetchAnalisisData()">Tampilkan</button>';
     rg.appendChild(dateRow);
 
-    // Week inputs
+    // Week inputs -- sama, pakai nilai week yang udah ditangkep, bukan kosong/hardcode.
     var weekRow = document.createElement('div'); weekRow.className='an-range-row'; weekRow.id='anWeekRow'; weekRow.style.display='none';
     var curYear = new Date().getFullYear();
     weekRow.innerHTML='<span style="font-size:11px;color:#64748b">W</span>'+
-      '<input type="number" id="anWeekFrom" class="an-range-input" placeholder="Dari week" min="1" max="53" style="max-width:90px">'+
+      '<input type="number" id="anWeekFrom" class="an-range-input" placeholder="Dari week" min="1" max="53" style="max-width:90px" value="'+esc(_anWeekFromVal)+'">'+
       '<span style="color:#94a3b8;font-size:11px">s/d W</span>'+
-      '<input type="number" id="anWeekTo"   class="an-range-input" placeholder="Sampai week" min="1" max="53" style="max-width:90px">'+
-      '<input type="number" id="anWeekYear" class="an-range-input" value="'+curYear+'" style="max-width:70px">'+
+      '<input type="number" id="anWeekTo"   class="an-range-input" placeholder="Sampai week" min="1" max="53" style="max-width:90px" value="'+esc(_anWeekToVal)+'">'+
+      '<input type="number" id="anWeekYear" class="an-range-input" value="'+esc(_anWeekYearVal||curYear)+'" style="max-width:70px">'+
       '<button class="an-range-btn" onclick="applyAnWeekFilter()">Tampilkan</button>';
     rg.appendChild(weekRow);
 
-    var info = document.createElement('div'); info.id='anRangeInfo'; info.className='an-range-info'; info.style.display='none'; rg.appendChild(info);
+    // Info label (mis. "W23-W25 2026 = ...") juga dipulihin -- sebelumnya
+    // selalu di-reset kosong+hidden tiap render, jadi ilang begitu ganti
+    // Kategori padahal user baru aja pilih lewat mode Week.
+    var info = document.createElement('div'); info.id='anRangeInfo'; info.className='an-range-info';
+    info.textContent = _anRangeInfoText;
+    info.style.display = _anRangeInfoShown ? '' : 'none';
+    rg.appendChild(info);
     wrap.appendChild(rg);
 
     // Toggle handler
@@ -3925,7 +4050,10 @@ function renderAnalisis() {
     }
     btDate.onclick = function(){ setMode('date'); };
     btWeek.onclick = function(){ setMode('week'); };
-    setMode('date');
+    // Pulihin mode yang lagi aktif (Tanggal/Week) -- sebelumnya selalu
+    // dipaksa balik ke 'date' tiap render, jadi kalau user lagi di tab Week
+    // terus klik pill Kategori, tampilan balik ke Tanggal sendiri.
+    setMode(_anActiveMode);
   })();
 
   wrap.appendChild(mkGroup('Tampilkan',[
@@ -4253,7 +4381,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v1.2.2';
+var APP_VERSION = 'LOADFLOW-v1.2.4';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -4471,6 +4599,7 @@ function openDetailDirect(btn) {
     var _stdMuat = _stdMntRaw !== null ? fmtMuatDur(_stdMntRaw) : '-';
     var _targetSelesai = computeTargetSelesai(r, _stdMntRaw);
     var isEkspD = (r.jenis||'').toUpperCase() === 'EKSPOR';
+    var isLokalPlannedD = !isEkspD && isLokalPlannedTipe(r.tipe);
     if(grid) grid.innerHTML =
       '<div class="detail-item"><div class="detail-item-label">No. Polisi</div><div class="detail-item-value">'+esc(r.no_pol||'-')+'</div></div>'+
       '<div class="detail-item"><div class="detail-item-label">Jenis</div><div class="detail-item-value">'+esc(r.jenis||'-')+'</div></div>'+
@@ -4480,12 +4609,12 @@ function openDetailDirect(btn) {
       '<div class="detail-item"><div class="detail-item-label">No. HP</div><div class="detail-item-value">'+esc(r.no_hp||'-')+'</div></div>'+
       (isEkspD && r.no_container ? '<div class="detail-item"><div class="detail-item-label">No. Container</div><div class="detail-item-value">'+esc(r.no_container)+'</div></div>' : '')+
       (r.riwayat_dock ? '<div class="detail-item"><div class="detail-item-label">Riwayat Dock</div><div class="detail-item-value">'+esc(r.riwayat_dock)+'</div></div>' : '')+
-      (isEkspD ? '<div class="detail-item"><div class="detail-item-label">Nama Barang</div><div id="dBarangInfo" class="detail-item-value" style="padding:0"><div class="barang-loading">—</div></div></div>' : '')+
+      ((isEkspD || isLokalPlannedD) ? '<div class="detail-item"><div class="detail-item-label">Nama Barang</div><div id="dBarangInfo" class="detail-item-value" style="padding:0"><div class="barang-loading">—</div></div></div>' : '')+
       '<div class="detail-item" style="background:#eff6ff;border:1.5px solid #bfdbfe"><div class="detail-item-label" style="color:#1d4ed8">STD Muat</div><div class="detail-item-value" style="color:#1d4ed8">'+_stdMuat+'</div>'+(_targetSelesai?'<div style="font-size:11px;color:#1d4ed8;opacity:.8;margin-top:2px">🎯 Target selesai '+_targetSelesai+'</div>':'')+'</div>'+
       '<div class="detail-item" style="background:#eff6ff;border:1.5px solid #bfdbfe"><div class="detail-item-label" style="color:#1d4ed8">Durasi Stay</div><div class="detail-item-value" style="color:#1d4ed8" id="dStayVal">—</div></div>';
 
-    // Load nama barang untuk EKSPOR
-    if (isEkspD && r.nodoc) showBarangInfo(r);
+    // Load nama barang untuk EKSPOR atau LOKAL RDC/SUBDIST
+    if ((isEkspD || isLokalPlannedD) && r.nodoc) showBarangInfo(r);
 
     // Tanggal daftar di bawah durasi stay
     if (r.tanggal) {
@@ -4686,6 +4815,7 @@ function openDetail(r) {
     ['Quantity',    r.qty && r.qty !== '0' ? esc(r.qty)+' krt' : '—'],
   ];
   var isEksp2 = (r.jenis||'').toUpperCase() === 'EKSPOR';
+  var isLokalPlanned2 = !isEksp2 && isLokalPlannedTipe(r.tipe);
   if (isEksp2 && r.no_container) rows.splice(rows.findIndex(function(x){return x[0]==='No. HP';})+1, 0, ['No. Container', esc(r.no_container)]);
   if (r.riwayat_dock) rows.push(['Riwayat Dock', esc(r.riwayat_dock)]);
   var grid = '';
@@ -4693,18 +4823,18 @@ function openDetail(r) {
     grid += '<div class="detail-item"><div class="detail-item-label">'+row[0]+'</div>'+
             '<div class="detail-item-value">'+row[1]+'</div></div>';
   });
-  if (isEksp2) grid += '<div class="detail-item"><div class="detail-item-label">Nama Barang</div><div id="dBarangInfo" class="detail-item-value" style="padding:0"><div class="barang-loading">—</div></div></div>';
+  if (isEksp2 || isLokalPlanned2) grid += '<div class="detail-item"><div class="detail-item-label">Nama Barang</div><div id="dBarangInfo" class="detail-item-value" style="padding:0"><div class="barang-loading">—</div></div></div>';
   grid += '<div class="detail-item" style="background:#eff6ff;border:1.5px solid #bfdbfe"><div class="detail-item-label" style="color:#1d4ed8">STD Muat</div><div class="detail-item-value" style="color:#1d4ed8">'+_stdMuat2+'</div>'+(_targetSelesai2?'<div style="font-size:11px;color:#1d4ed8;opacity:.8;margin-top:2px">🎯 Target selesai '+_targetSelesai2+'</div>':'')+'</div>';
   grid += '<div class="detail-item" style="background:#eff6ff;border:1.5px solid #bfdbfe"><div class="detail-item-label" style="color:#1d4ed8">Durasi Stay</div><div class="detail-item-value" style="color:#1d4ed8" id="dStayVal">—</div></div>';
-  // Load nama barang untuk EKSPOR
-  if (isEksp2 && r.nodoc) { var _afterGrid2 = true; } // panggil setelah elGrid.innerHTML
+  // Load nama barang untuk EKSPOR atau LOKAL RDC/SUBDIST
+  if ((isEksp2 || isLokalPlanned2) && r.nodoc) { var _afterGrid2 = true; } // panggil setelah elGrid.innerHTML
 
   if (r.tanggal) {
     var _tglP2 = r.tanggal.split('-');
     grid += '<div style="grid-column:1/-1;text-align:center;font-size:12px;color:#64748b;font-weight:600;padding:4px 0 2px">📅 '+_tglP2[2]+'/'+_tglP2[1]+'/'+_tglP2[0]+'</div>';
   }
   var elGrid = $id('dGrid'); if(elGrid) elGrid.innerHTML = grid;
-  if (isEksp2 && r.nodoc) showBarangInfo(r);
+  if ((isEksp2 || isLokalPlanned2) && r.nodoc) showBarangInfo(r);
 
   // Render catatan
   _renderNoteList(r.catatan || '');
@@ -4998,14 +5128,31 @@ function toggleDetailEdit() {
       _f('dEditContainer', r.no_container||'');
       // Tipe hanya untuk LOKAL
       var _isEkspEdit = (r.jenis||'').toUpperCase() === 'EKSPOR';
+      // LOKAL dengan TIPE RDC/SUBDIST juga punya sumber planning otomatis
+      // (LK RDC / RESERVED DIRECT DETAIL) -- lihat getBarangLokalByNoDoc().
+      var _isLokalPlanned = !_isEkspEdit && isLokalPlannedTipe(r.tipe);
       var _tipeWrap = document.getElementById('dEditTipeWrap');
       if (_tipeWrap) _tipeWrap.style.display = _isEkspEdit ? 'none' : '';
       var _nbWrap = document.getElementById('dEditNamaBarangWrap');
-      if (_nbWrap) _nbWrap.style.display = _isEkspEdit ? '' : 'none';
+      if (_nbWrap) _nbWrap.style.display = (_isEkspEdit || _isLokalPlanned) ? '' : 'none';
       if (_isEkspEdit) {
         _editNamaBarangItems = parseNamaBarangItemsJS(r.nama_barang);
         renderNamaBarangItemsList();
         refreshAddControls(r.nodoc, r.tanggal, r.id);
+      } else if (_isLokalPlanned) {
+        var _existingLokalItems = parseNamaBarangItemsJS(r.nama_barang);
+        if (_existingLokalItems.length > 0) {
+          // Udah pernah diisi/diedit sebelumnya -- pakai itu, jangan ditimpa
+          // auto-fetch ulang. Operator masih bisa nambah/hapus manual.
+          _editNamaBarangItems = _existingLokalItems;
+          renderNamaBarangItemsList();
+          refreshAddControlsLokal(r.nodoc, r.tipe, r.id);
+        } else {
+          // Truk baru / belum pernah diisi -- auto isi semua item yang match.
+          _editNamaBarangItems = [];
+          renderNamaBarangItemsList();
+          autoFillLokalFromPlanning(r.nodoc, r.tipe, r.id);
+        }
       } else {
         // BUG FIX: sebelumnya variable ini nggak direset sama sekali kalau
         // truk yang dibuka BUKAN EKSPOR -- jadi kalau sebelumnya operator
@@ -5057,17 +5204,21 @@ function doEditData() {
   if (!alasan) { toast('⚠️ Alasan edit wajib diisi'); return; }
   // GUARD tambahan (di luar fix reset _editNamaBarangItems di atas): payload
   // 'nama_barang' HANYA disertain kalau truk yang lagi diedit ini beneran
-  // EKSPOR. Kalau bukan, field ini di-skip total dari request -- jadi walau
-  // suatu saat ada state basi lain yang belum kepikiran, backend nggak akan
-  // pernah nerima nama_barang buat truk non-EKSPOR dari jalur form edit ini.
+  // EKSPOR, atau LOKAL ber-TIPE RDC/SUBDIST (dua-duanya sekarang sah punya
+  // nama_barang, lihat getBarangLokalByNoDoc()). Kalau bukan salah satu dari
+  // itu, field ini di-skip total dari request -- jadi walau suatu saat ada
+  // state basi lain yang belum kepikiran, backend nggak akan pernah nerima
+  // nama_barang buat truk yang nggak berhak dari jalur form edit ini.
   var _rEdit = window._cardMap && window._cardMap[_editDetailId];
   var _isEkspEditSave = _rEdit && (_rEdit.jenis||'').toUpperCase() === 'EKSPOR';
+  var _tipeEditSave = g('dEditTipe');
+  var _isLokalPlannedSave = !_isEkspEditSave && isLokalPlannedTipe(_tipeEditSave);
   var payload = { action:'editData', id:_editDetailId, token:_sessionToken,
         nama:g('dEditNama'), nopol:g('dEditNopol').toUpperCase(),
         eksp:g('dEditEksp'), nodoc:g('dEditNodoc'),
         qty:g('dEditQty'), tujuan:g('dEditTujuan'), tipe:g('dEditTipe'), no_container:g('dEditContainer'),
         hp:g('dEditHp'), alasan:alasan };
-  if (_isEkspEditSave) {
+  if (_isEkspEditSave || _isLokalPlannedSave) {
     payload.nama_barang = JSON.stringify(_editNamaBarangItems.filter(function(it){ return it && it.sku; }));
   }
   api(payload,
