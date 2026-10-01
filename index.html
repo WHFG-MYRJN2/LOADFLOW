@@ -2445,7 +2445,16 @@ function printPickingList() {
   var r = window._cardMap && window._cardMap[_editDetailId];
   if (!r) { toast('❌ Data truk tidak ditemukan'); return; }
   var items = parseNamaBarangItemsJS(r.nama_barang);
-  if (!items.length) { toast('⚠️ Truk ini belum punya Nama Barang yang dipilih'); return; }
+  var isEksporR = (r.jenis||'').toUpperCase() === 'EKSPOR';
+  var isLokalPlannedR = !isEksporR && isLokalPlannedTipe(r.tipe);
+
+  // EKSPOR (atau LOKAL yang bukan RDC/SUBDIST) TETAP wajib udah ada Nama
+  // Barang TERSIMPAN dulu -- nggak ada sumber planning otomatis buat
+  // fallback di sini.
+  if (!items.length && !isLokalPlannedR) {
+    toast('⚠️ Truk ini belum punya Nama Barang yang dipilih');
+    return;
+  }
 
   // PENTING: window.open() HARUS dipanggil synchronous di sini, langsung dari
   // event klik user — SEBELUM fetch async apapun. Kalau dipanggil belakangan
@@ -2459,8 +2468,38 @@ function printPickingList() {
     '<style>body{font-family:Arial,Helvetica,sans-serif;padding:40px;color:#64748b;text-align:center}</style>' +
     '</head><body><p>⏳ Menyiapkan picking list, mohon tunggu...</p></body></html>');
   w.document.close();
-
   toast('⏳ Menyiapkan picking list...');
+
+  if (items.length) {
+    printPickingListWithItems(w, r, items);
+    return;
+  }
+
+  // items KOSONG tapi truk LOKAL RDC/SUBDIST -- belum tentu operator sempat
+  // buka Edit & Simpan dulu (fitur ini emang didesain auto-isi, operator
+  // nggak WAJIB pilih manual). Coba ambil langsung dari planning biar tetap
+  // bisa cetak TANPA maksa buka-Edit-Simpan dulu. Ini CUMA buat kebutuhan
+  // cetak saat ini -- tidak nulis balik ke NAMA_BARANG truk (murni baca).
+  api({ action:'getBarangLokalByNoDoc', tipe:r.tipe||'', nodoc:r.nodoc||'', token:_sessionToken }, function(res) {
+    if (!res || !res.success || !res.list || !res.list.length) {
+      w.document.open();
+      w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Picking List</title>' +
+        '<style>body{font-family:Arial,Helvetica,sans-serif;padding:40px;color:#dc2626;text-align:center}</style>' +
+        '</head><body><p>&#9888; Nama Barang belum diisi &amp; No.Dokumen tidak ketemu di planning.<br>Buka Edit buat isi manual dulu, baru cetak lagi.</p></body></html>');
+      w.document.close();
+      return;
+    }
+    printPickingListWithItems(w, r, res.list.map(function(it){ return { sku:it.sku, nama:it.nama, qty:it.qty }; }));
+  }, function() {
+    w.document.open();
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Picking List</title>' +
+      '<style>body{font-family:Arial,Helvetica,sans-serif;padding:40px;color:#dc2626;text-align:center}</style>' +
+      '</head><body><p>&#9888; Gagal memuat Nama Barang dari planning. Tutup tab ini, coba cetak ulang.</p></body></html>');
+    w.document.close();
+  });
+}
+
+function printPickingListWithItems(w, r, items) {
   var results = new Array(items.length);
   var pending = items.length;
 
@@ -4451,7 +4490,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.2.7';
+var APP_VERSION = 'LOADFLOW-v2.2.8';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
