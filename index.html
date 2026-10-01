@@ -3077,6 +3077,14 @@ function switchTab(el) {
     _av.style.display='';
     _av.classList.remove('tab-content-anim');void _av.offsetWidth;_av.classList.add('tab-content-anim');
     renderAnalisis();
+    // Pertama kali tab ini dibuka (_anData masih null, belum pernah di-fetch
+    // sama sekali) -- langsung tampilin pakai rentang tanggal default
+    // (2026-06-01 s/d hari ini, udah keisi otomatis di renderAnalisis()),
+    // nggak perlu operator klik "Tampilkan" manual dulu buat liat APAPUN.
+    // Setelah data pernah di-fetch sekali (termasuk hasilnya kosong),
+    // _anData udah bukan null lagi -- jadi pindah-pindah tab balik ke sini
+    // nggak nge-fetch ulang terus/nimpa rentang yang lagi dipilih user.
+    if (_anData === null) fetchAnalisisData();
     return;
   }
   var _oc=document.getElementById('opCards');
@@ -4267,8 +4275,17 @@ function renderAnalisis() {
     wrap.appendChild(e); return;
   }
 
-  function buildChart(labels,counts,dispVals,title,sub) {
-    var unit=anUnitLabel();
+  // Format nilai satu bucket jadi teks yang ditampilin. Mode 'krt' cuma
+  // nunjukin krt doang (itu udah jadi fokus utamanya). Mode 'mobil' SENGAJA
+  // dikasih dua-duanya sekaligus pakai garis miring ("10 mobil / 1.234 krt")
+  // -- biar langsung kebaca setara berapa krt-nya tanpa harus pindah toggle.
+  function anDispText(cnt, krt) {
+    if (_anMetric === 'krt') return anFmtNum(krt)+' krt';
+    return anFmtNum(cnt)+' mobil / '+anFmtNum(krt)+' krt';
+  }
+
+  function buildChart(labels,counts,cntArr,krtArr,title,sub) {
+    var dispVals = labels.map(function(l,i){ return anDispText(cntArr[i], krtArr[i]); });
     var max=Math.max.apply(null,counts)||1;
     var pi=counts.indexOf(Math.max.apply(null,counts));
     var nonZero=counts.filter(function(v){return v>0;});
@@ -4276,7 +4293,7 @@ function renderAnalisis() {
     var card=document.createElement('div'); card.className='an-card';
     card.innerHTML='<div class="an-card-title">'+title+'</div><div class="an-card-sub">'+sub+'</div>';
     var pb=document.createElement('div'); pb.className='an-peak-badge';
-    pb.textContent='Peak: '+labels[pi]+' ('+dispVals[pi]+' '+unit+')'; card.appendChild(pb);
+    pb.textContent='Peak: '+labels[pi]+' ('+dispVals[pi]+')'; card.appendChild(pb);
     labels.forEach(function(l,i){
       var pct=max>0?Math.round(counts[i]/max*100):0;
       var cls=i===pi?'an-peak':(counts[i]>=avg*1.4?'an-high':(counts[i]>0?'an-normal':'an-low'));
@@ -4284,51 +4301,56 @@ function renderAnalisis() {
       var delay=(i*0.025).toFixed(3)+'s';
       row.innerHTML='<div class="an-bar-lbl">'+l+'</div>'+
         '<div class="an-bar-track"><div class="an-bar-fill '+cls+'" style="width:'+pct+'%;animation-delay:'+delay+'"></div></div>'+
-        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both">'+dispVals[i]+' <span style="color:#94a3b8;font-weight:600;font-size:10px">'+unit+'</span></div>';
+        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both;font-size:12px">'+dispVals[i]+'</div>';
       card.appendChild(row);
     });
     return card;
   }
 
-  var anSrcLabel = _anMetric==='krt' ? (anFmtNum(filtered.reduce(function(a,r){return a+anMetricVal(r);},0))+' krt') : filtered.length+' truk';
+  var totalMobil = filtered.length;
+  var totalKrt   = filtered.reduce(function(a,r){ return a+(parseFloat(r.qty)||0); },0);
+  var anSrcLabel = _anMetric==='krt' ? (anFmtNum(totalKrt)+' krt') : (totalMobil+' truk');
 
   if(_anMode==='hour'){
-    var hc=new Array(24).fill(0);
+    var hc=new Array(24).fill(0), hk=new Array(24).fill(0);
     filtered.forEach(function(r){
       var raw=r.waktu_daftar||'';
       var hStr=raw.length>5?raw.slice(11,13):raw.slice(0,2);
-      var h=parseInt(hStr,10); if(!isNaN(h)&&h>=0&&h<24) hc[h]+=anMetricVal(r);
+      var h=parseInt(hStr,10); if(!isNaN(h)&&h>=0&&h<24){ hc[h]++; hk[h]+=(parseFloat(r.qty)||0); }
     });
     var hL=[]; for(var i=0;i<24;i++) hL.push(('0'+i).slice(-2)+':00');
-    var hDisp=hc.map(anFmtNum);
+    var hCounts=_anMetric==='krt'?hk:hc;
     var _subRange=(_anFrom?_anFrom:'')+(_anTo?' s/d '+_anTo:'');
-    wrap.appendChild(buildChart(hL,hc,hDisp,'Peak Hour Kedatangan',anSrcLabel+' · '+(_subRange||'semua data')));
+    wrap.appendChild(buildChart(hL,hCounts,hc,hk,'Peak Hour Kedatangan',anSrcLabel+' · '+(_subRange||'semua data')));
 
   }else if(_anMode==='day'){
     var dL=['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
     var dLFull=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-    var dc=new Array(7).fill(0);
-    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) dc[d.getDay()]+=anMetricVal(r); });
+    var dc=new Array(7).fill(0), dk=new Array(7).fill(0);
+    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)){ dc[d.getDay()]++; dk[d.getDay()]+=(parseFloat(r.qty)||0); } });
     var wks=Math.max(1,Math.ceil((new Date()-new Date(startDate))/604800000));
-    var dAvg=dc.map(function(v){return v/wks;});
-    var dAvgDisp=dAvg.map(anFmtNum);
-    var dN=dAvg.map(function(v){return Math.round(v*10);});
-    wrap.appendChild(buildChart(dLFull,dN,dAvgDisp,'Peak Day dalam Seminggu','Rata-rata '+anUnitLabel()+'/hari · '+wks+' minggu data'));
+    var dcAvg=dc.map(function(v){return v/wks;});
+    var dkAvg=dk.map(function(v){return v/wks;});
+    var dCountsAvg=_anMetric==='krt'?dkAvg:dcAvg;
+    var dN=dCountsAvg.map(function(v){return Math.round(v*10);});
+    wrap.appendChild(buildChart(dLFull,dN,dcAvg,dkAvg,'Peak Day dalam Seminggu','Rata-rata per hari · '+wks+' minggu data'));
 
   }else if(_anMode==='month'){
     var mL=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    var mc=new Array(12).fill(0);
-    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) mc[d.getMonth()]+=anMetricVal(r); });
-    var mDisp=mc.map(anFmtNum);
-    wrap.appendChild(buildChart(mL,mc,mDisp,'Distribusi Per Bulan',anSrcLabel+' total'));
+    var mc=new Array(12).fill(0), mk=new Array(12).fill(0);
+    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)){ mc[d.getMonth()]++; mk[d.getMonth()]+=(parseFloat(r.qty)||0); } });
+    var mCounts=_anMetric==='krt'?mk:mc;
+    wrap.appendChild(buildChart(mL,mCounts,mc,mk,'Distribusi Per Bulan',anSrcLabel+' total'));
 
   }else if(_anMode==='year'){
-    var yc={};
-    filtered.forEach(function(r){ if(!r.tanggal) return; var y=r.tanggal.slice(0,4); yc[y]=(yc[y]||0)+anMetricVal(r); });
-    var yK=Object.keys(yc).sort(); var yCt=yK.map(function(k){return yc[k];});
-    if(!yK.length){yK=['2026'];yCt=[0];}
-    var yDisp=yCt.map(anFmtNum);
-    wrap.appendChild(buildChart(yK,yCt,yDisp,'Distribusi Per Tahun',anSrcLabel+' total'));
+    var yc={}, yk={};
+    filtered.forEach(function(r){ if(!r.tanggal) return; var y=r.tanggal.slice(0,4); yc[y]=(yc[y]||0)+1; yk[y]=(yk[y]||0)+(parseFloat(r.qty)||0); });
+    var yK=Object.keys(yc).sort();
+    if(!yK.length) yK=['2026'];
+    var yCt=yK.map(function(k){return yc[k]||0;});
+    var yKrt=yK.map(function(k){return yk[k]||0;});
+    var yCounts=_anMetric==='krt'?yKrt:yCt;
+    wrap.appendChild(buildChart(yK,yCounts,yCt,yKrt,'Distribusi Per Tahun',anSrcLabel+' total'));
   }
 }
 
@@ -4597,7 +4619,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.1';
+var APP_VERSION = 'LOADFLOW-v2.3.2';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
