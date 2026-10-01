@@ -427,6 +427,9 @@ input,select,textarea{font-family:inherit}
 .card-timer{font-size:11px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px}
 .timer-warn{background:#fef3c7;color:#d97706}
 .timer-alert{background:#fee2e2;color:#dc2626}
+.q-card.card-prioritas{border-left:5px solid #b91c1c;background:#fef2f2;box-shadow:inset 0 0 0 1px #fecaca}
+.q-card.card-prioritas .q-bold{color:#7f1d1d}
+.q-card.card-prioritas .q-badge{filter:brightness(.95)}
 
 .dock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .dock-btn{padding:14px 8px;border-radius:12px;border:2px solid;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;text-align:center;line-height:1.3}
@@ -821,6 +824,9 @@ input,select,textarea{font-family:inherit}
 .card-timer{font-size:11px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px}
 .timer-warn{background:#fef3c7;color:#d97706}
 .timer-alert{background:#fee2e2;color:#dc2626}
+.q-card.card-prioritas{border-left:5px solid #b91c1c;background:#fef2f2;box-shadow:inset 0 0 0 1px #fecaca}
+.q-card.card-prioritas .q-bold{color:#7f1d1d}
+.q-card.card-prioritas .q-badge{filter:brightness(.95)}
 
 .dock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
 .dock-btn{padding:14px 8px;border-radius:12px;border:2px solid;font-size:15px;font-weight:800;cursor:pointer;transition:all .2s;text-align:center;line-height:1.3}
@@ -1542,6 +1548,14 @@ input,select,textarea{font-family:inherit}
         <label>Template Pesan</label>
         <textarea id="setPesan"></textarea>
         <div class="set-hint">Variabel: {nama} {nopol} {nomor} {keperluan}</div>
+      </div>
+    </div>
+    <div class="set-group">
+      <h3>⭐ Prioritas Ekspedisi</h3>
+      <div class="fg">
+        <label>Nama Ekspedisi Prioritas (1 nama per baris)</label>
+        <textarea id="setPrioritasEksp" placeholder="Langgeng&#10;Hidup Cemerlang Abadi"></textarea>
+        <div class="set-hint">Truk dari ekspedisi yang namanya cocok persis (gak peduli huruf besar/kecil) bakal ditandai PRIORITAS (kartu merah) di dashboard. Bisa isi lebih dari 1, satu nama per baris.</div>
       </div>
     </div>
     <div class="set-group">
@@ -2499,23 +2513,50 @@ function printPickingList() {
   });
 }
 
+// Sengaja diproses SATU-SATU (bukan items.forEach nembak semua sekaligus
+// kayak sebelumnya) -- tiap item motret FULL sheet BIN_CURRENT (bisa gede)
+// dari spreadsheet LAIN, PLUS rebutan LockService.getScriptLock() yang
+// scope-nya SATU buat SELURUH script (dipakai bareng SEMUA action lain,
+// bukan cuma punya truk ini). Truk 1 SKU nggak pernah kena masalah (cuma 1
+// request). Truk multi-SKU nembak semua SEKALIGUS -> numpuk, rebutan lock,
+// sebagian ketahan lama & lewat batas 30 detik di browser -> item itu
+// otomatis dianggap "gagal" (makanya random, "kadang bisa kadang 1 doang",
+// tergantung timing GAS pas itu). Diproses satu-satu (nunggu 1 selesai baru
+// mulai berikutnya) + retry per-item 3x -- lebih lambat totalnya, tapi gak
+// numpuk & gak gampang lewat 30 detik.
 function printPickingListWithItems(w, r, items) {
   var results = new Array(items.length);
-  var pending = items.length;
 
-  items.forEach(function(it, idx) {
+  function fetchOne(idx, attempt) {
+    attempt = attempt || 1;
+    var it = items[idx];
     api({ action:'getPosisiBarangFIFO', sku:it.sku, qty:it.qty||0, truckId:r.id, token:_sessionToken }, function(res) {
       results[idx] = { sku:it.sku, nama:it.nama, qty:it.qty,
         list:(res&&res.success&&res.list)||[], kurang:(res&&res.kurang)||0, totalNeeded:(res&&res.totalNeeded)||it.qty||0 };
-      pending--; if (pending === 0) renderPrintWindow(w, r, results);
+      advance(idx);
     }, function() {
+      if (attempt < 3) { setTimeout(function(){ fetchOne(idx, attempt+1); }, 1200); return; }
       results[idx] = { sku:it.sku, nama:it.nama, qty:it.qty, list:[], kurang:0, totalNeeded:it.qty||0, gagal:true };
-      pending--; if (pending === 0) renderPrintWindow(w, r, results);
+      advance(idx);
     });
-  });
+  }
+  function advance(idx) {
+    if (idx + 1 < items.length) fetchOne(idx + 1);
+    else renderPrintWindow(w, r, results);
+  }
+  fetchOne(0);
 }
 
 function renderPrintWindow(w, r, items) {
+  // Khusus truk LOKAL (RDC/SUBDIST): "✓ Stok cukup" yang keulang di SETIAP
+  // item makan tempat kalau item-nya banyak (biasanya LOKAL multi-SKU lebih
+  // sering daripada EKSPOR). Dipindah jadi SATU ringkasan di kepala picking
+  // list aja. Peringatan KEKURANGAN (merah) TETAP ditampilin per item --
+  // itu actionable, picker perlu tau SKU mana yang kurang. EKSPOR nggak
+  // diubah, tetap tampil "Stok cukup" per item kayak biasa.
+  var isEksporPrint = (r.jenis||'').toUpperCase() === 'EKSPOR';
+  var isLokalPlannedPrint = !isEksporPrint && isLokalPlannedTipe(r.tipe);
+
   var itemSections = items.map(function(p, i) {
     var rowsHtml = '';
     if (p.gagal) {
@@ -2529,7 +2570,7 @@ function renderPrintWindow(w, r, items) {
     }
     var statusHtml = p.kurang > 0
       ? '<p style="color:#dc2626;font-weight:bold;margin:6px 0 0">&#9888; Stok kurang '+p.kurang+' krt dari target ('+p.totalNeeded+' krt)</p>'
-      : '<p style="color:#15803d;font-weight:bold;margin:6px 0 0">&#10003; Stok cukup</p>';
+      : (isLokalPlannedPrint ? '' : '<p style="color:#15803d;font-weight:bold;margin:6px 0 0">&#10003; Stok cukup</p>');
     var qtyLabel = (p.qty !== undefined && p.qty !== null && p.qty !== '') ? esc(p.qty)+' krt' : '<span style="color:#f59e0b">belum diisi</span>';
     return '<div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px">'+
       '<h2 style="margin:0 0 6px">Item '+(i+1)+': '+esc(p.sku)+' — '+esc(p.nama)+' <span style="font-weight:400;color:#64748b;font-size:12.5px">(Target: '+qtyLabel+')</span></h2>'+
@@ -2538,6 +2579,14 @@ function renderPrintWindow(w, r, items) {
       statusHtml+
     '</div>';
   }).join('');
+
+  var summaryHtml = '';
+  if (isLokalPlannedPrint) {
+    var kurangCount = items.filter(function(p){ return p.kurang > 0; }).length;
+    summaryHtml = kurangCount > 0
+      ? '<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px;font-weight:700;color:#dc2626">&#9888; '+kurangCount+' dari '+items.length+' item kekurangan stok — lihat rincian merah di tiap item</div>'
+      : '<div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px;font-weight:700;color:#15803d">&#10003; Semua stok cukup ('+items.length+' item)</div>';
+  }
 
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Picking List - '+esc(r.nomor||'')+'</title>'+
     '<style>'+
@@ -2571,6 +2620,7 @@ function renderPrintWindow(w, r, items) {
       '<div><b>Loading Dock</b>: '+esc(r.dock||'-')+'</div>'+
       '<div><b>Tanggal</b>: '+esc(r.tanggal||'-')+'</div>'+
     '</div>'+
+    summaryHtml+
     itemSections+
     '<div style="border:2px solid #dc2626;border-radius:8px;padding:14px 18px;margin:14px 0;text-align:center">'+
       '<p style="margin:0;font-size:17px;font-weight:800;color:#dc2626;letter-spacing:.3px">PASTIKAN MFD/PRODATE SESUAI DENGAN SI, CORET PRODATE YANG TIDAK DIGUNAKAN</p>'+
@@ -3635,6 +3685,14 @@ function renderCards() {
         timerBadge = '<span class="card-timer timer-warn">🟡 '+jamStr+' (WAKTU STAY)</span>';
       }
     }
+    // Ekspedisi prioritas (diatur di Settings) -- kartu merah + badge
+    // PRIORITAS. Ditambahin (bukan nimpa) cardCls yang udah ada, biar status
+    // RDC-overdue di atas tetap kebaca walau kebetulan dua-duanya aktif.
+    var prioritasBadge = '';
+    if (isEkspedisiPrioritas(r.eksp)) {
+      cardCls = (cardCls ? cardCls+' ' : '') + 'card-prioritas';
+      prioritasBadge = '<span class="card-timer" style="background:#dc2626;color:#fff">⭐ PRIORITAS</span>';
+    }
     return '<div class="q-card '+cardCls+'" style="cursor:pointer" data-id="'+r.id+'">'+
       '<div class="q-card-body" onclick="openDetailDirect(this)" style="cursor:pointer">'+
         '<div class="q-badge '+bc+'">'+r.nomor+'</div>'+
@@ -3645,6 +3703,7 @@ function renderCards() {
             '</span>'+
             '<span class="q-card-time">'+hm(r.waktu_daftar)+'</span>'+
             statusBadge+
+            prioritasBadge+
             timerBadge+
           '</div>'+
           '<div class="q-card-sub q-bold">'+
@@ -4040,9 +4099,23 @@ function fetchAnalisisData() {
 }
 
 // ── ANALISIS PEAK ─────────────────────────────────────────────
-var _anKat  = 'ALL';
-var _anMode = 'hour';
+var _anKat    = 'ALL';
+var _anMode   = 'hour';
+var _anMetric = 'mobil'; // 'mobil' = hitung jumlah truk, 'krt' = jumlah krt terkirim (sum qty)
 var _anData = null; // null = belum di-fetch sama sekali; array = hasil fetch sesuai rentang yg dipilih
+
+function anUnitLabel() { return _anMetric === 'krt' ? 'krt' : 'mobil'; }
+// Nilai per-truk yang diakumulasi ke tiap bucket chart -- 1 (hitung truk)
+// kalau mode mobil, atau qty krt-nya kalau mode krt. Truk yang qty-nya
+// kosong/invalid dianggap 0 (nggak nambahin apa-apa), BUKAN bikin NaN nyebar
+// ke seluruh total.
+function anMetricVal(r) {
+  if (_anMetric === 'krt') return parseFloat(r.qty) || 0;
+  return 1;
+}
+function anFmtNum(n) {
+  return (Math.round(n*10)/10).toLocaleString('id-ID');
+}
 
 function renderAnalisis() {
   var el = document.getElementById('analisisView');
@@ -4171,6 +4244,10 @@ function renderAnalisis() {
     {label:'Per Bulan', active:_anMode==='month', cls:'mode-active', fn:function(){_anMode='month';renderAnalisis();}},
     {label:'Per Tahun', active:_anMode==='year',  cls:'mode-active', fn:function(){_anMode='year';renderAnalisis();}}
   ]));
+  wrap.appendChild(mkGroup('Satuan',[
+    {label:'Jml Mobil',       active:_anMetric==='mobil', cls:'mode-active', fn:function(){_anMetric='mobil';renderAnalisis();}},
+    {label:'Jml Krt Terkirim',active:_anMetric==='krt',   cls:'mode-active', fn:function(){_anMetric='krt';renderAnalisis();}}
+  ]));
 
   // Stats
   var sr=document.createElement('div'); sr.className='an-stat-row'; wrap.appendChild(sr);
@@ -4191,6 +4268,7 @@ function renderAnalisis() {
   }
 
   function buildChart(labels,counts,dispVals,title,sub) {
+    var unit=anUnitLabel();
     var max=Math.max.apply(null,counts)||1;
     var pi=counts.indexOf(Math.max.apply(null,counts));
     var nonZero=counts.filter(function(v){return v>0;});
@@ -4198,7 +4276,7 @@ function renderAnalisis() {
     var card=document.createElement('div'); card.className='an-card';
     card.innerHTML='<div class="an-card-title">'+title+'</div><div class="an-card-sub">'+sub+'</div>';
     var pb=document.createElement('div'); pb.className='an-peak-badge';
-    pb.textContent='Peak: '+labels[pi]+' ('+dispVals[pi]+')'; card.appendChild(pb);
+    pb.textContent='Peak: '+labels[pi]+' ('+dispVals[pi]+' '+unit+')'; card.appendChild(pb);
     labels.forEach(function(l,i){
       var pct=max>0?Math.round(counts[i]/max*100):0;
       var cls=i===pi?'an-peak':(counts[i]>=avg*1.4?'an-high':(counts[i]>0?'an-normal':'an-low'));
@@ -4206,45 +4284,51 @@ function renderAnalisis() {
       var delay=(i*0.025).toFixed(3)+'s';
       row.innerHTML='<div class="an-bar-lbl">'+l+'</div>'+
         '<div class="an-bar-track"><div class="an-bar-fill '+cls+'" style="width:'+pct+'%;animation-delay:'+delay+'"></div></div>'+
-        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both">'+dispVals[i]+'</div>';
+        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both">'+dispVals[i]+' <span style="color:#94a3b8;font-weight:600;font-size:10px">'+unit+'</span></div>';
       card.appendChild(row);
     });
     return card;
   }
+
+  var anSrcLabel = _anMetric==='krt' ? (anFmtNum(filtered.reduce(function(a,r){return a+anMetricVal(r);},0))+' krt') : filtered.length+' truk';
 
   if(_anMode==='hour'){
     var hc=new Array(24).fill(0);
     filtered.forEach(function(r){
       var raw=r.waktu_daftar||'';
       var hStr=raw.length>5?raw.slice(11,13):raw.slice(0,2);
-      var h=parseInt(hStr,10); if(!isNaN(h)&&h>=0&&h<24) hc[h]++;
+      var h=parseInt(hStr,10); if(!isNaN(h)&&h>=0&&h<24) hc[h]+=anMetricVal(r);
     });
     var hL=[]; for(var i=0;i<24;i++) hL.push(('0'+i).slice(-2)+':00');
+    var hDisp=hc.map(anFmtNum);
     var _subRange=(_anFrom?_anFrom:'')+(_anTo?' s/d '+_anTo:'');
-    wrap.appendChild(buildChart(hL,hc,hc,'Peak Hour Kedatangan',filtered.length+' truk � '+(_subRange||'semua data')));
+    wrap.appendChild(buildChart(hL,hc,hDisp,'Peak Hour Kedatangan',anSrcLabel+' · '+(_subRange||'semua data')));
 
   }else if(_anMode==='day'){
     var dL=['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
     var dLFull=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
     var dc=new Array(7).fill(0);
-    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) dc[d.getDay()]++; });
+    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) dc[d.getDay()]+=anMetricVal(r); });
     var wks=Math.max(1,Math.ceil((new Date()-new Date(startDate))/604800000));
-    var dAvg=dc.map(function(v){return parseFloat((v/wks).toFixed(1));});
-    var dN=dc.map(function(v){return Math.round(v/wks*10);});
-    wrap.appendChild(buildChart(dLFull,dN,dAvg,'Peak Day dalam Seminggu','Rata-rata truk/hari � '+wks+' minggu data'));
+    var dAvg=dc.map(function(v){return v/wks;});
+    var dAvgDisp=dAvg.map(anFmtNum);
+    var dN=dAvg.map(function(v){return Math.round(v*10);});
+    wrap.appendChild(buildChart(dLFull,dN,dAvgDisp,'Peak Day dalam Seminggu','Rata-rata '+anUnitLabel()+'/hari · '+wks+' minggu data'));
 
   }else if(_anMode==='month'){
     var mL=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
     var mc=new Array(12).fill(0);
-    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) mc[d.getMonth()]++; });
-    wrap.appendChild(buildChart(mL,mc,mc,'Distribusi Per Bulan',filtered.length+' truk total'));
+    filtered.forEach(function(r){ if(!r.tanggal) return; var d=new Date(r.tanggal); if(!isNaN(d)) mc[d.getMonth()]+=anMetricVal(r); });
+    var mDisp=mc.map(anFmtNum);
+    wrap.appendChild(buildChart(mL,mc,mDisp,'Distribusi Per Bulan',anSrcLabel+' total'));
 
   }else if(_anMode==='year'){
     var yc={};
-    filtered.forEach(function(r){ if(!r.tanggal) return; var y=r.tanggal.slice(0,4); yc[y]=(yc[y]||0)+1; });
+    filtered.forEach(function(r){ if(!r.tanggal) return; var y=r.tanggal.slice(0,4); yc[y]=(yc[y]||0)+anMetricVal(r); });
     var yK=Object.keys(yc).sort(); var yCt=yK.map(function(k){return yc[k];});
     if(!yK.length){yK=['2026'];yCt=[0];}
-    wrap.appendChild(buildChart(yK,yCt,yCt,'Distribusi Per Tahun',filtered.length+' truk total'));
+    var yDisp=yCt.map(anFmtNum);
+    wrap.appendChild(buildChart(yK,yCt,yDisp,'Distribusi Per Tahun',anSrcLabel+' total'));
   }
 }
 
@@ -4434,16 +4518,39 @@ function loadSettingsForm() {
   document.getElementById('setPrefix').value = S.prefix_nomor   || 'T';
   document.getElementById('setWa').value     = S.no_wa          || '';
   document.getElementById('setPesan').value  = S.pesan_template || '';
+  document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
+}
+
+// Parse daftar ekspedisi prioritas dari Settings (disimpan sebagai JSON
+// array string di key prioritas_ekspedisi). Dipisah fungsi sendiri biar
+// dipakai bareng dari loadSettingsForm() DAN dari renderCards() buat nandain
+// kartu yang prioritas.
+function getPrioritasEkspedisiList() {
+  try {
+    var arr = JSON.parse(S.prioritas_ekspedisi || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch(e) { return []; }
+}
+// Cocok PERSIS (abaikan besar/kecil huruf & spasi di pinggir) -- sengaja
+// bukan "mengandung", biar gak salah tandain ekspedisi lain yang namanya
+// kebetulan mirip/sepotong.
+function isEkspedisiPrioritas(eksp) {
+  var e = String(eksp||'').trim().toLowerCase();
+  if (!e) return false;
+  return getPrioritasEkspedisiList().some(function(p){ return String(p||'').trim().toLowerCase() === e; });
 }
 
 function doSaveSettings() {
+  var prioritasList = document.getElementById('setPrioritasEksp').value
+    .split('\n').map(function(s){ return s.trim(); }).filter(function(s){ return s; });
   var params = {
     action        : 'saveSettings',
     token         : _sessionToken,
     nama_gudang   : document.getElementById('setNama').value.trim(),
     prefix_nomor  : document.getElementById('setPrefix').value.trim()||'T',
     no_wa         : document.getElementById('setWa').value.trim(),
-    pesan_template: document.getElementById('setPesan').value.trim()
+    pesan_template: document.getElementById('setPesan').value.trim(),
+    prioritas_ekspedisi: JSON.stringify(prioritasList)
   };
   var selBuka = document.getElementById('inputAntrianBuka');
   if(selBuka) params.antrian_buka = selBuka.value || '';
@@ -4490,7 +4597,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.2.8';
+var APP_VERSION = 'LOADFLOW-v1.2.12';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
