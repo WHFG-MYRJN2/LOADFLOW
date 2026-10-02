@@ -1075,7 +1075,7 @@ input,select,textarea{font-family:inherit}
             <input type="text" id="dEditNopol" class="de-inp" style="text-transform:uppercase" placeholder="—"></div>
           <div><label class="de-lbl">Nama Ekspedisi</label>
             <input type="text" id="dEditEksp" class="de-inp" placeholder="—"></div>
-          <div><label class="de-lbl">No. Dokumen</label>
+          <div><label class="de-lbl">No. Dokumen <small style="color:#9ca3af;font-weight:400">(pisah koma kalau lebih dari 1)</small></label>
             <input type="text" id="dEditNodoc" class="de-inp" placeholder="—"></div>
           <div><label class="de-lbl">Quantity</label>
             <input type="number" id="dEditQty" class="de-inp" placeholder="—" min="0"></div>
@@ -1345,8 +1345,8 @@ input,select,textarea{font-family:inherit}
       <input type="text" id="fNopol" placeholder="Contoh: B 1234 XYZ" style="text-transform:uppercase" autocomplete="off">
     </div>
     <div class="fg">
-      <label>No. Doc <small style="color:#9ca3af;font-weight:400">(opsional)</small></label>
-      <input type="text" id="fNoDoc" placeholder="Contoh: 02205/MDSC" autocomplete="off">
+      <label>No. Doc <small style="color:#9ca3af;font-weight:400">(opsional, pisah koma kalau lebih dari 1)</small></label>
+      <input type="text" id="fNoDoc" placeholder="Contoh: 02205/MDSC atau 02205/MDSC,02206/MDSC" autocomplete="off">
     </div>
     <div class="fg">
       <label>Quantity <small style="color:#9ca3af;font-weight:400">(opsional)</small></label>
@@ -4619,7 +4619,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.3';
+var APP_VERSION = 'LOADFLOW-v1.2.17';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
