@@ -582,15 +582,15 @@ input,select,textarea{font-family:inherit}
 .an-card-title{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:2px}
 .an-card-sub{font-size:11px;color:#94a3b8;margin-bottom:10px}
 .an-peak-badge{display:inline-block;background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:12px}
-.an-bar-row{display:grid;grid-template-columns:46px 1fr 32px;align-items:center;gap:6px;margin-bottom:3px}
-.an-bar-lbl{font-size:10px;color:#94a3b8;font-weight:600;text-align:right}
-.an-bar-track{background:#f1f5f9;border-radius:6px;height:18px;overflow:hidden}
+.an-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.an-bar-lbl{font-size:10px;color:#94a3b8;font-weight:600;white-space:nowrap;flex:0 0 auto}
+.an-bar-track{background:#f1f5f9;border-radius:6px;height:14px;overflow:hidden;flex:1 1 auto;min-width:16px}
 .an-bar-fill{height:100%;border-radius:6px;min-width:2px;transition:width .5s}
 .an-bar-fill.an-peak{background:linear-gradient(90deg,#ef4444,#f87171)}
 .an-bar-fill.an-high{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
 .an-bar-fill.an-normal{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
 .an-bar-fill.an-low{background:#e2e8f0}
-.an-bar-val{font-size:11px;font-weight:700;color:#334155}
+.an-bar-val{font-size:11px;font-weight:700;color:#334155;text-align:right;white-space:nowrap;flex:0 0 auto}
 @keyframes anFadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes anBarGrow{from{width:0!important}to{}}
 @keyframes anPillPop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
@@ -4301,7 +4301,7 @@ function renderAnalisis() {
       var delay=(i*0.025).toFixed(3)+'s';
       row.innerHTML='<div class="an-bar-lbl">'+l+'</div>'+
         '<div class="an-bar-track"><div class="an-bar-fill '+cls+'" style="width:'+pct+'%;animation-delay:'+delay+'"></div></div>'+
-        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both;font-size:12px">'+dispVals[i]+'</div>';
+        '<div class="an-bar-val" style="animation:anFadeUp .3s '+delay+' both">'+dispVals[i]+'</div>';
       card.appendChild(row);
     });
     return card;
@@ -4619,7 +4619,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.2';
+var APP_VERSION = 'LOADFLOW-v2.3.3';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
