@@ -1405,6 +1405,11 @@ input,select,textarea{font-family:inherit}
   </div>
 </div>
 
+<!-- Halaman reservasi publik (#reservasi) sekarang ada di repo pendaftaran
+     sopir yang terpisah, BUKAN di sini -- repo ini (dashboard admin/operator)
+     cuma nyimpen backend (Code.gs) + tab admin "Reservasi" buat liat/kelola
+     reservasinya. Lihat repo sopir buat halaman self-service-nya. -->
+
 <!-- ══ PAGE: TIKET ════════════════════════════════════════ -->
 <div id="page-tiket" class="page">
   <div class="page-header">
@@ -1490,6 +1495,7 @@ input,select,textarea{font-family:inherit}
       <button class="op-tab"        data-tab="DOCK"           onclick="switchTab(this)">Loading Dock <span id="cnt-DOCK" class="tab-cnt">0</span></button>
       <button class="op-tab"        data-tab="TREATMENT"      onclick="switchTab(this)" style="display:none">Treatment <span id="cnt-TREATMENT" class="tab-cnt">0</span></button>
       <button class="op-tab"        data-tab="SEMUA"          onclick="switchTab(this)">📋 Semua <span id="cnt-SEMUA" class="tab-cnt">0</span></button>
+      <button class="op-tab"        data-tab="RESERVASI"      onclick="switchTab(this)">📅 Reservasi</button>
       <button class="op-tab"        data-tab="ANALISIS"       onclick="switchTab(this)">📊 Analisis</button>
     </div>
   </div>
@@ -1518,6 +1524,7 @@ input,select,textarea{font-family:inherit}
 
   <!-- Cards container -->
   <div id="analisisView" style="display:none;padding:12px"></div>
+  <div id="reservasiView" style="display:none;padding:12px"></div>
   <div class="op-cards" id="opCards">
     <div class="empty-cards">Belum ada antrian hari ini</div>
   </div>
@@ -1558,6 +1565,25 @@ input,select,textarea{font-family:inherit}
         <div class="set-hint">Truk dari ekspedisi yang namanya cocok persis (gak peduli huruf besar/kecil) bakal ditandai PRIORITAS (kartu merah) di dashboard. Bisa isi lebih dari 1, satu nama per baris.</div>
       </div>
     </div>
+    <div class="set-group">
+      <h3>📅 Reservasi Slot</h3>
+      <div class="fg" style="display:flex;align-items:center;justify-content:space-between;flex-direction:row">
+        <label style="margin:0">Aktifkan reservasi slot (publik)</label>
+        <label class="toggle-keluar-btn" style="margin:0">
+          <input type="checkbox" id="setReservasiAktif">
+          <span class="toggle-keluar-slider"></span>
+        </label>
+      </div>
+      <div class="fg"><label>Kuota per jam</label><input type="number" id="setReservasiKuota" placeholder="5" min="1" style="width:100px"></div>
+      <div class="fg" style="display:flex;gap:10px">
+        <div style="flex:1"><label>Jam Mulai</label><input type="time" id="setReservasiJamMulai"></div>
+        <div style="flex:1"><label>Jam Selesai</label><input type="time" id="setReservasiJamSelesai"></div>
+      </div>
+      <div class="fg"><label>Maksimal reservasi H+ berapa hari</label><input type="number" id="setReservasiHMaks" placeholder="3" min="0" style="width:100px"></div>
+      <div class="set-hint">Kalau aktif, ekspedisi bisa reservasi jam kedatangan sendiri lewat link di bawah ini (bisa dibagikan via WA). Truk yang dateng tanpa reservasi (walk-in) tetap diterima, tapi diprioritaskan di belakang yang sudah reservasi pada tab Antrian.</div>
+      <div class="gas-url-box" id="rsvLinkBox" onclick="copyRsvLink()" style="margin-top:8px">—</div>
+    </div>
+
     <div class="set-group">
       <h3>Keamanan</h3>
     </div>
@@ -1924,6 +1950,13 @@ function onJenisChange() {
     if(g('fgContainer')) g('fgContainer').style.display = 'none';
   }
 }
+
+// Halaman reservasi publik (#reservasi, self-service ekspedisi) pindah ke
+// repo pendaftaran sopir yang terpisah -- lihat catatan di dekat
+// #page-tiket. Repo ini cuma masih punya sisi ADMIN-nya: tab "Reservasi" +
+// modal "+ Tambah Reservasi" (lihat RESERVASI SLOT (tab admin) di bawah),
+// yang manggil action backend yang SAMA (getReservasiAvailability,
+// buatReservasiSlot, dst, lihat Code.gs) lewat GAS_URL yang sama juga.
 
 function loadBarangInfo(noDoc, tanggal, elId, excludeId) {
   var el = document.getElementById(elId);
@@ -3087,9 +3120,19 @@ function switchTab(el) {
     if (_anData === null) fetchAnalisisData();
     return;
   }
+  if (_activeTab === 'RESERVASI') {
+    document.getElementById('opCards').style.display = 'none';
+    document.getElementById('analisisView').style.display = 'none';
+    var _rv=document.getElementById('reservasiView');
+    _rv.style.display='';
+    _rv.classList.remove('tab-content-anim');void _rv.offsetWidth;_rv.classList.add('tab-content-anim');
+    renderReservasiAdmin();
+    return;
+  }
   var _oc=document.getElementById('opCards');
   if(_oc){_oc.style.display='';_oc.classList.remove('tab-content-anim');void _oc.offsetWidth;_oc.classList.add('tab-content-anim');}
   document.getElementById('analisisView').style.display = 'none';
+  document.getElementById('reservasiView').style.display = 'none';
   if (_activeTab === 'DOCK') {
     // Render LANGSUNG pakai cache tanpa lewat renderCards
     renderDockTab();
@@ -3114,6 +3157,163 @@ function switchTab(el) {
 }
 
 function filterCards() { renderCards(); }
+
+// ── RESERVASI SLOT (tab admin) ────────────────────────────────
+var _rsvAdminTanggal = '';
+var _raJamTerpilih = '';
+
+function todayStr_() {
+  var tz = new Date(); tz.setMinutes(tz.getMinutes()-tz.getTimezoneOffset());
+  return tz.toISOString().slice(0,10);
+}
+
+function renderReservasiAdmin() {
+  if (!_rsvAdminTanggal) _rsvAdminTanggal = todayStr_();
+  var el = document.getElementById('reservasiView');
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
+      '<input type="date" id="rsvAdminTanggalInp" class="date-input" value="'+esc(_rsvAdminTanggal)+'" onchange="onRsvAdminTanggalChange(this)">'+
+      '<button class="btn-primary" style="width:auto;padding:8px 16px;margin:0" onclick="openRsvAdminModal()">+ Tambah Reservasi</button>'+
+    '</div>'+
+    '<div id="rsvAdminSlotSummary" style="margin-bottom:14px"></div>'+
+    '<div id="rsvAdminList"><div style="text-align:center;color:#94a3b8;padding:20px 0">Memuat...</div></div>';
+  fetchReservasiAdmin();
+}
+
+function onRsvAdminTanggalChange(inp) {
+  _rsvAdminTanggal = inp.value;
+  fetchReservasiAdmin();
+}
+
+function fetchReservasiAdmin() {
+  var tanggal = _rsvAdminTanggal;
+  api({ action:'getReservasiAvailability', tanggal:tanggal, token:_sessionToken }, function(res) {
+    var sw = document.getElementById('rsvAdminSlotSummary');
+    if (!sw) return;
+    if (!res || !res.success) { sw.innerHTML = '<div style="font-size:12px;color:#ef4444">Gagal memuat ringkasan slot</div>'; return; }
+    if (!res.aktif) {
+      sw.innerHTML = '<div style="font-size:12px;color:#d97706;background:#fffbeb;padding:8px 12px;border-radius:8px">⚠️ Reservasi slot sedang NONAKTIF (publik nggak bisa reservasi sendiri). Nyalain di Pengaturan &gt; Reservasi Slot.</div>';
+    } else {
+      sw.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:6px">'+res.slots.map(function(s){
+        var warna = s.sisa<=0 ? '#ef4444' : (s.sisa<=1 ? '#f59e0b' : '#16a34a');
+        return '<span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:#f1f5f9;color:'+warna+'">'+s.jam+' · '+s.terisi+'/'+s.kuota+'</span>';
+      }).join('')+'</div>';
+    }
+  }, function() { var sw=document.getElementById('rsvAdminSlotSummary'); if (sw) sw.innerHTML = '<div style="font-size:12px;color:#ef4444">Koneksi gagal</div>'; });
+
+  api({ action:'getReservasiList', tanggal:tanggal, token:_sessionToken }, function(res) {
+    var lw = document.getElementById('rsvAdminList');
+    if (!lw) return;
+    if (!res || !res.success) { lw.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px 0">Gagal memuat daftar reservasi</div>'; return; }
+    if (!res.list.length) { lw.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px 0">Belum ada reservasi di tanggal ini</div>'; return; }
+    var STAT_WARNA = { AKTIF:'#2563eb', SUDAH_CHECKIN:'#16a34a', DIBATALKAN:'#94a3b8', HANGUS:'#94a3b8' };
+    var STAT_LABEL = { AKTIF:'Aktif', SUDAH_CHECKIN:'✓ Sudah Check-in', DIBATALKAN:'Dibatalkan', HANGUS:'Hangus' };
+    lw.innerHTML = res.list.map(function(r) {
+      var warna = STAT_WARNA[r.status] || '#64748b';
+      return '<div style="background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+          '<span style="font-weight:800;font-size:14px">🕐 '+esc(r.jam)+'</span>'+
+          '<span style="font-size:11px;font-weight:700;color:'+warna+'">'+(STAT_LABEL[r.status]||r.status)+'</span>'+
+        '</div>'+
+        '<div style="font-size:13px;font-weight:700;color:#0f172a">'+esc(r.no_pol)+' · '+esc(r.eksp)+'</div>'+
+        '<div style="font-size:12px;color:#64748b">'+esc(r.nama)+' · '+esc(r.jenis)+(r.tipe?' · '+esc(r.tipe):'')+(r.tujuan?' → '+esc(r.tujuan):'')+'</div>'+
+        '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Kode: '+esc(r.kode)+' · dibuat oleh '+esc(r.dibuat_oleh)+(r.dibuat_pada?' · '+esc(r.dibuat_pada):'')+'</div>'+
+        (r.status === STATUS_RSV_AKTIF
+          ? '<button class="btn-sec" style="margin-top:8px;padding:5px 12px;font-size:12px" onclick="cancelRsvAdmin(\''+r.id+'\')">Batalkan</button>'
+          : '')+
+      '</div>';
+    }).join('');
+  }, function() { var lw=document.getElementById('rsvAdminList'); if (lw) lw.innerHTML = '<div style="text-align:center;color:#ef4444;padding:20px 0">Koneksi gagal</div>'; });
+}
+var STATUS_RSV_AKTIF = 'AKTIF';
+
+function cancelRsvAdmin(id) {
+  if (!confirm('Batalkan reservasi ini?')) return;
+  loading(true);
+  api({ action:'batalkanReservasi', id:id, token:_sessionToken }, function(res) {
+    loading(false);
+    if (res && res.success) { toast('✅ Reservasi dibatalkan'); fetchReservasiAdmin(); }
+    else toast('❌ '+(res && res.error ? res.error : 'Gagal membatalkan'));
+  }, function() { loading(false); toast('❌ Koneksi gagal'); });
+}
+
+function onJenisChangeRa() {
+  var jenis = g('raJenis') ? g('raJenis').value : '';
+  if (g('fgRaTipe'))   g('fgRaTipe').style.display   = (jenis === 'LOKAL')  ? 'block' : 'none';
+  if (g('fgRaTujuan')) g('fgRaTujuan').style.display = (jenis === 'EKSPOR') ? 'block' : 'none';
+}
+
+function openRsvAdminModal() {
+  ['raNama','raEksp','raNopol','raNoDoc','raQty','raTujuan','raHp'].forEach(function(id){ var el=g(id); if(el) el.value=''; });
+  if (g('raJenis')) g('raJenis').value = '';
+  onJenisChangeRa();
+  _raJamTerpilih = '';
+  var ti = g('raTanggal');
+  if (ti) { ti.value = _rsvAdminTanggal || todayStr_(); ti.min = todayStr_(); }
+  loadRaSlots();
+  document.getElementById('rsvAdminModal').style.display = 'flex';
+}
+
+function closeRsvAdminModal() {
+  document.getElementById('rsvAdminModal').style.display = 'none';
+}
+
+function loadRaSlots() {
+  var tanggal = g('raTanggal') ? g('raTanggal').value : '';
+  var wrap = document.getElementById('raSlotsWrap');
+  if (!wrap) return;
+  _raJamTerpilih = '';
+  if (!tanggal) { wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8">Pilih tanggal dulu.</div>'; return; }
+  wrap.innerHTML = '<div style="font-size:12px;color:#94a3b8">Memuat...</div>';
+  api({ action:'getReservasiAvailability', tanggal:tanggal, token:_sessionToken }, function(res) {
+    if (!res || !res.success || !res.slots || !res.slots.length) { wrap.innerHTML = '<div style="font-size:12px;color:#ef4444">Jam operasional reservasi belum diatur</div>'; return; }
+    wrap.innerHTML = res.slots.map(function(s) {
+      var penuh = s.sisa <= 0;
+      return '<button type="button" class="btn-sec ra-slot-btn" data-jam="'+s.jam+'" '+(penuh?'disabled':'onclick="pilihRaJam(this)"')+' '+
+        'style="padding:5px 9px;font-size:12px;'+(penuh?'opacity:.4;cursor:not-allowed':'')+'">'+s.jam+' ('+s.sisa+'/'+s.kuota+')</button>';
+    }).join('');
+  }, function() { wrap.innerHTML = '<div style="font-size:12px;color:#ef4444">Koneksi gagal</div>'; });
+}
+
+function pilihRaJam(btn) {
+  document.querySelectorAll('.ra-slot-btn').forEach(function(b){ b.style.background=''; b.style.color=''; b.style.borderColor=''; });
+  btn.style.background = '#2563eb'; btn.style.color = '#fff'; btn.style.borderColor = '#2563eb';
+  _raJamTerpilih = btn.getAttribute('data-jam');
+}
+
+function submitRsvAdmin() {
+  var tanggal = g('raTanggal').value.trim();
+  var jam     = _raJamTerpilih;
+  var nama    = g('raNama').value.trim();
+  var eksp    = g('raEksp').value.trim();
+  var nopol   = g('raNopol').value.trim().toUpperCase();
+  var nodoc   = g('raNoDoc').value.trim();
+  var qty     = g('raQty').value.trim();
+  var jenis   = g('raJenis').value;
+  var tipe    = g('raTipe').value;
+  var tujuan  = g('raTujuan').value.trim();
+  var hp      = g('raHp').value.trim();
+
+  if (!tanggal) { toast('⚠️ Pilih tanggal'); return; }
+  if (!jam)     { toast('⚠️ Pilih jam slot'); return; }
+  if (!nama)    { toast('⚠️ Nama sopir wajib diisi'); return; }
+  if (!eksp)    { toast('⚠️ Nama ekspedisi wajib diisi'); return; }
+  if (!nopol)   { toast('⚠️ No. polisi wajib diisi'); return; }
+  if (!jenis)   { toast('⚠️ Pilih jenis'); return; }
+  if (jenis === 'LOKAL' && !tipe)    { toast('⚠️ Pilih tipe pengiriman'); return; }
+  if (jenis === 'EKSPOR' && !tujuan) { toast('⚠️ Tujuan wajib diisi'); return; }
+
+  loading(true);
+  api({ action:'buatReservasiSlot', token:_sessionToken, tanggal:tanggal, jam:jam, nama:nama, eksp:eksp,
+        nopol:nopol, nodoc:nodoc, qty:qty, jenis:jenis, tipe:tipe, tujuan:tujuan, hp:hp },
+    function(res) {
+      loading(false);
+      if (res && res.success) { toast('✅ Reservasi dibuat'); closeRsvAdminModal(); fetchReservasiAdmin(); }
+      else toast('❌ '+(res && res.error ? res.error : 'Gagal menyimpan'));
+    },
+    function() { loading(false); toast('❌ Koneksi gagal'); }
+  );
+}
 
 
 
@@ -3589,12 +3789,22 @@ function renderCards() {
            (r.tujuan||'').toLowerCase().includes(q) ||
            (r.nodoc ||'').toLowerCase().includes(q);
   });
-  // Sort: qty override saat tab ANTRIAN dan sortQtyOrder aktif, else waktu
+  // Sort: qty override saat tab ANTRIAN dan sortQtyOrder aktif, else waktu.
+  // Tab ANTRIAN (antrian yang masih nunggu) KHUSUS dapat 1 tingkat lagi SEBELUM
+  // waktu: truk yang dateng dari Reservasi Slot (ada jam_reservasi, artinya
+  // udah booking jam duluan) didahulukan dari yang walk-in murni -- biar
+  // walk-in "diprioritaskan belakang" dari yang udah reservasi, sesuai
+  // permintaan. Qty-sort tetap menang kalau operator eksplisit mengaktifkan
+  // itu (pilihan manual operator, jangan ditimpa otomatis).
   window._vc.sort(function(a,b){
     if (_activeTab === 'ANTRIAN' && _sortQtyOrder !== 'none') {
       var qa = parseFloat(a.qty) || 0;
       var qb = parseFloat(b.qty) || 0;
       if (qa !== qb) return _sortQtyOrder === 'asc' ? qa - qb : qb - qa;
+    }
+    if (_activeTab === 'ANTRIAN') {
+      var ra = !!a.jam_reservasi, rb = !!b.jam_reservasi;
+      if (ra !== rb) return ra ? -1 : 1;
     }
     var ta = (a.tanggal||'') + (a.waktu_daftar||'');
     var tb = (b.tanggal||'') + (b.waktu_daftar||'');
@@ -3701,6 +3911,10 @@ function renderCards() {
       cardCls = (cardCls ? cardCls+' ' : '') + 'card-prioritas';
       prioritasBadge = '<span class="card-timer" style="background:#dc2626;color:#fff">⭐ PRIORITAS</span>';
     }
+    // Truk yang asalnya dari reservasi slot (cocok nopol+tanggal pas daftar,
+    // lihat cariDanTandaiReservasi_() di backend) -- badge biru, BUKAN nimpa
+    // cardCls (beda dari prioritas ekspedisi, ini cuma info, bukan alert).
+    var reservasiBadge = r.jam_reservasi ? '<span class="card-timer" style="background:#0ea5e9;color:#fff">📅 '+esc(r.jam_reservasi)+'</span>' : '';
     return '<div class="q-card '+cardCls+'" style="cursor:pointer" data-id="'+r.id+'">'+
       '<div class="q-card-body" onclick="openDetailDirect(this)" style="cursor:pointer">'+
         '<div class="q-badge '+bc+'">'+r.nomor+'</div>'+
@@ -3712,6 +3926,7 @@ function renderCards() {
             '<span class="q-card-time">'+hm(r.waktu_daftar)+'</span>'+
             statusBadge+
             prioritasBadge+
+            reservasiBadge+
             timerBadge+
           '</div>'+
           '<div class="q-card-sub q-bold">'+
@@ -4521,18 +4736,9 @@ function doAdvance(id, newStatus) {
   );
 }
 
-function doReset() {
-  if (!confirm('Reset semua antrian hari ini?\nData akan dihapus permanen.')) return;
-  loading(true);
-  api({ action:'resetAntrian', token:_sessionToken },
-    function(res){
-      loading(false);
-      toast(res.success?'✅ Reset berhasil':'❌ Gagal reset');
-      if(res.success){ _allList=[]; renderAllTabs(); renderCards(); }
-    },
-    function(){ loading(false); }
-  );
-}
+// Fungsi doReset()/resetAntrian (hapus semua antrian sekaligus) sudah DICABUT
+// total dari sini & dari Code.gs -- sebelumnya dead code (nggak ke-pasang ke
+// tombol manapun), daripada nganggur jadi jalur berbahaya mending dicabut.
 
 // ── SETTINGS ──────────────────────────────────────────────────
 function loadSettingsForm() {
@@ -4541,6 +4747,20 @@ function loadSettingsForm() {
   document.getElementById('setWa').value     = S.no_wa          || '';
   document.getElementById('setPesan').value  = S.pesan_template || '';
   document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
+  document.getElementById('setReservasiAktif').checked   = S.reservasi_aktif === '1';
+  document.getElementById('setReservasiKuota').value     = S.reservasi_kuota_per_jam || '5';
+  document.getElementById('setReservasiJamMulai').value  = S.reservasi_jam_mulai || '08:00';
+  document.getElementById('setReservasiJamSelesai').value= S.reservasi_jam_selesai || '17:00';
+  document.getElementById('setReservasiHMaks').value     = S.reservasi_h_maks || '3';
+  var lb = document.getElementById('rsvLinkBox');
+  if (lb) lb.textContent = location.origin + location.pathname + '#reservasi';
+}
+
+// Link publik buat dibagikan ke ekspedisi (lewat WA dll) -- klik kotaknya
+// di Settings buat nyalin, sama kayak pola copyGasUrl() di bawah.
+function copyRsvLink() {
+  var link = location.origin + location.pathname + '#reservasi';
+  navigator.clipboard && navigator.clipboard.writeText(link).then(function(){ toast('✅ Link reservasi disalin'); });
 }
 
 // Parse daftar ekspedisi prioritas dari Settings (disimpan sebagai JSON
@@ -4572,7 +4792,12 @@ function doSaveSettings() {
     prefix_nomor  : document.getElementById('setPrefix').value.trim()||'T',
     no_wa         : document.getElementById('setWa').value.trim(),
     pesan_template: document.getElementById('setPesan').value.trim(),
-    prioritas_ekspedisi: JSON.stringify(prioritasList)
+    prioritas_ekspedisi: JSON.stringify(prioritasList),
+    reservasi_aktif: document.getElementById('setReservasiAktif').checked ? '1' : '0',
+    reservasi_kuota_per_jam: document.getElementById('setReservasiKuota').value.trim() || '5',
+    reservasi_jam_mulai: document.getElementById('setReservasiJamMulai').value || '08:00',
+    reservasi_jam_selesai: document.getElementById('setReservasiJamSelesai').value || '17:00',
+    reservasi_h_maks: document.getElementById('setReservasiHMaks').value.trim() || '3'
   };
   var selBuka = document.getElementById('inputAntrianBuka');
   if(selBuka) params.antrian_buka = selBuka.value || '';
@@ -4619,7 +4844,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.4';
+var APP_VERSION = 'LOADFLOW-v2.3.5';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -5052,6 +5277,7 @@ function openDetail(r) {
     ['No. HP',      esc(r.no_hp||'—')],
     ['Quantity',    r.qty && r.qty !== '0' ? esc(r.qty)+' krt' : '—'],
   ];
+  if (r.jam_reservasi) rows.push(['Reservasi', '📅 Jam '+esc(r.jam_reservasi)]);
   var isEksp2 = (r.jenis||'').toUpperCase() === 'EKSPOR';
   var isLokalPlanned2 = !isEksp2 && isLokalPlannedTipe(r.tipe);
   if (isEksp2 && r.no_container) rows.splice(rows.findIndex(function(x){return x[0]==='No. HP';})+1, 0, ['No. Container', esc(r.no_container)]);
@@ -6201,6 +6427,45 @@ initSW();
       </div>
     </div>
     <button class="btn-back" onclick="closeApprovalModal()">Tutup</button>
+  </div>
+</div>
+
+<!-- Modal: Tambah Reservasi (admin) -->
+<div class="modal-overlay" id="rsvAdminModal" style="display:none" onclick="if(event.target===this)closeRsvAdminModal()">
+  <div class="modal-box" style="max-width:420px;text-align:left;max-height:88vh;overflow-y:auto">
+    <h3 style="text-align:center">📅 Tambah Reservasi</h3>
+    <div class="fg"><label>Tanggal</label><input type="date" id="raTanggal" onchange="loadRaSlots()"></div>
+    <div class="fg">
+      <label>Jam Slot</label>
+      <div id="raSlotsWrap" style="display:flex;flex-wrap:wrap;gap:6px">
+        <div style="font-size:12px;color:#94a3b8">Pilih tanggal dulu.</div>
+      </div>
+    </div>
+    <div class="fg"><label>Nama Sopir</label><input type="text" id="raNama"></div>
+    <div class="fg"><label>Nama Ekspedisi</label><input type="text" id="raEksp"></div>
+    <div class="fg"><label>No. Polisi</label><input type="text" id="raNopol" style="text-transform:uppercase"></div>
+    <div class="fg"><label>No. Doc <small style="color:#9ca3af;font-weight:400">(opsional)</small></label><input type="text" id="raNoDoc"></div>
+    <div class="fg"><label>Quantity <small style="color:#9ca3af;font-weight:400">(opsional)</small></label><input type="number" id="raQty" min="0"></div>
+    <div class="fg">
+      <label>Jenis</label>
+      <select id="raJenis" onchange="onJenisChangeRa()">
+        <option value="">— Pilih —</option>
+        <option value="LOKAL">LOKAL</option>
+        <option value="EKSPOR">EKSPOR</option>
+      </select>
+    </div>
+    <div class="fg" id="fgRaTipe" style="display:none">
+      <label>Tipe Pengiriman</label>
+      <select id="raTipe">
+        <option value="">— Pilih —</option>
+        <option value="LUAR KOTA (RDC)">LUAR KOTA (RDC)</option>
+        <option value="SUBDIST">SUBDIST</option>
+      </select>
+    </div>
+    <div class="fg" id="fgRaTujuan" style="display:none"><label>Tujuan</label><input type="text" id="raTujuan" style="text-transform:uppercase"></div>
+    <div class="fg"><label>No. HP <small style="color:#9ca3af;font-weight:400">(opsional)</small></label><input type="tel" id="raHp"></div>
+    <button class="btn-primary" onclick="submitRsvAdmin()">Simpan Reservasi</button>
+    <button class="btn-back" onclick="closeRsvAdminModal()">Batal</button>
   </div>
 </div>
 
