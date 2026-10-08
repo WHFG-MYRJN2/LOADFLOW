@@ -4747,7 +4747,7 @@ function loadSettingsForm() {
   document.getElementById('setWa').value     = S.no_wa          || '';
   document.getElementById('setPesan').value  = S.pesan_template || '';
   document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
-  document.getElementById('setReservasiAktif').checked   = S.reservasi_aktif === '1';
+  document.getElementById('setReservasiAktif').checked   = String(S.reservasi_aktif) === '1'; // tolerir angka 1 juga
   document.getElementById('setReservasiKuota').value     = S.reservasi_kuota_per_jam || '5';
   document.getElementById('setReservasiJamMulai').value  = S.reservasi_jam_mulai || '08:00';
   document.getElementById('setReservasiJamSelesai').value= S.reservasi_jam_selesai || '17:00';
@@ -4848,7 +4848,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.7';
+var APP_VERSION = 'LOADFLOW-v2.3.8';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
