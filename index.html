@@ -535,6 +535,12 @@ input,select,textarea{font-family:inherit}
 .jadwal-times input[type="time"]{flex:1;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151}
 .jadwal-times span{color:#94a3b8;font-size:12px}
 .jadwal-libur{font-size:12px;color:#94a3b8;font-style:italic}
+.rsv-jadwal-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+.rsv-jadwal-row:last-child{border-bottom:none}
+.rsv-jadwal-body{flex:1;display:flex;flex-direction:column;gap:6px}
+.rsv-jadwal-label{font-size:11px;color:#94a3b8;width:58px;flex-shrink:0}
+.rsv-jadwal-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.rsv-jadwal-actions button{padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;cursor:pointer;color:#94a3b8;background:#fff;white-space:nowrap}
 .toggle-buka{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:12px;padding:14px 16px;border:2px solid #e5e7eb;margin-bottom:14px}
 .toggle-buka.open{border-color:#86efac;background:#f0fdf4}
 .toggle-buka.closed{border-color:#fca5a5;background:#fef2f2}
@@ -932,6 +938,12 @@ input,select,textarea{font-family:inherit}
 .jadwal-times input[type="time"]{flex:1;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151}
 .jadwal-times span{color:#94a3b8;font-size:12px}
 .jadwal-libur{font-size:12px;color:#94a3b8;font-style:italic}
+.rsv-jadwal-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
+.rsv-jadwal-row:last-child{border-bottom:none}
+.rsv-jadwal-body{flex:1;display:flex;flex-direction:column;gap:6px}
+.rsv-jadwal-label{font-size:11px;color:#94a3b8;width:58px;flex-shrink:0}
+.rsv-jadwal-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.rsv-jadwal-actions button{padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;cursor:pointer;color:#94a3b8;background:#fff;white-space:nowrap}
 .toggle-buka{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:12px;padding:14px 16px;border:2px solid #e5e7eb;margin-bottom:14px}
 .toggle-buka.open{border-color:#86efac;background:#f0fdf4}
 .toggle-buka.closed{border-color:#fca5a5;background:#fef2f2}
@@ -1575,11 +1587,12 @@ input,select,textarea{font-family:inherit}
         </label>
       </div>
       <div class="fg"><label>Kuota per jam</label><input type="number" id="setReservasiKuota" placeholder="5" min="1" style="width:100px"></div>
-      <div class="fg" style="display:flex;gap:10px">
-        <div style="flex:1"><label>Jam Mulai</label><input type="time" id="setReservasiJamMulai"></div>
-        <div style="flex:1"><label>Jam Selesai</label><input type="time" id="setReservasiJamSelesai"></div>
-      </div>
       <div class="fg"><label>Maksimal reservasi H+ berapa hari</label><input type="number" id="setReservasiHMaks" placeholder="3" min="0" style="width:100px"></div>
+      <div class="fg">
+        <label>Jam Operasional Reservasi (per hari)</label>
+        <div class="set-hint" style="margin-top:0;margin-bottom:8px">Jam buka reservasi bisa beda-beda tiap hari, dan bisa diisi jam istirahat (slot di jam itu otomatis nggak ditawarin). Kosongin Jam Mulai/Selesai kalau hari itu libur/gak buka reservasi.</div>
+        <div id="rsvJadwalRows" style="margin-top:4px"></div>
+      </div>
       <div class="set-hint">Kalau aktif, ekspedisi bisa reservasi jam kedatangan sendiri lewat link di bawah ini (bisa dibagikan via WA). Truk yang dateng tanpa reservasi (walk-in) tetap diterima, tapi diprioritaskan di belakang yang sudah reservasi pada tab Antrian.</div>
       <div class="gas-url-box" id="rsvLinkBox" onclick="copyRsvLink()" style="margin-top:8px">—</div>
     </div>
@@ -4749,11 +4762,58 @@ function loadSettingsForm() {
   document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
   document.getElementById('setReservasiAktif').checked   = String(S.reservasi_aktif) === '1'; // tolerir angka 1 juga
   document.getElementById('setReservasiKuota').value     = S.reservasi_kuota_per_jam || '5';
-  document.getElementById('setReservasiJamMulai').value  = S.reservasi_jam_mulai || '08:00';
-  document.getElementById('setReservasiJamSelesai').value= S.reservasi_jam_selesai || '17:00';
   document.getElementById('setReservasiHMaks').value     = S.reservasi_h_maks || '3';
+  renderRsvJadwalSettings();
   var lb = document.getElementById('rsvLinkBox');
   if (lb) lb.textContent = APP_LINK + '#reservasi';
+}
+
+// Jadwal reservasi per-hari (Senin..Minggu) + jam istirahat -- beda dari
+// jadwal antrian walk-in (jadwal_senin dkk, lihat renderJadwalSettings di
+// bawah). Dipisah fungsi sendiri biar gampang dimaintain, tapi pola & nama
+// fungsinya sengaja mirip renderJadwalSettings/clearJadwal.
+function renderRsvJadwalSettings() {
+  var wrap = document.getElementById('rsvJadwalRows');
+  if (!wrap) return;
+  wrap.innerHTML = DAYS_ID.map(function(d, i) {
+    var j = (S && S['reservasi_jadwal_'+d]) || '';
+    var jp = j ? j.split('-') : ['',''];
+    var ist = (S && S['reservasi_istirahat_'+d]) || '';
+    var ip = ist ? ist.split('-') : ['',''];
+    return '<div class="rsv-jadwal-row">'+
+      '<div class="jadwal-day">'+DAYS_LBL[i]+'</div>'+
+      '<div class="rsv-jadwal-body">'+
+        '<div class="jadwal-times">'+
+          '<span class="rsv-jadwal-label">Jam</span>'+
+          '<input type="time" id="rsvbuka_'+d+'" value="'+(jp[0]||'')+'" placeholder="--:--">'+
+          '<span>-</span>'+
+          '<input type="time" id="rsvtutup_'+d+'" value="'+(jp[1]||'')+'" placeholder="--:--">'+
+        '</div>'+
+        '<div class="jadwal-times">'+
+          '<span class="rsv-jadwal-label">Istirahat</span>'+
+          '<input type="time" id="rsvistbuka_'+d+'" value="'+(ip[0]||'')+'" placeholder="--:--">'+
+          '<span>-</span>'+
+          '<input type="time" id="rsvisttutup_'+d+'" value="'+(ip[1]||'')+'" placeholder="--:--">'+
+        '</div>'+
+      '</div>'+
+      '<div class="rsv-jadwal-actions">'+
+        '<button type="button" onclick="clearRsvJadwal(\''+d+'\')">Libur</button>'+
+        '<button type="button" onclick="clearRsvIstirahat(\''+d+'\')">Hapus Istirahat</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function clearRsvJadwal(day) {
+  ['rsvbuka_','rsvtutup_','rsvistbuka_','rsvisttutup_'].forEach(function(p){
+    var el = document.getElementById(p+day); if (el) el.value = '';
+  });
+}
+
+function clearRsvIstirahat(day) {
+  ['rsvistbuka_','rsvisttutup_'].forEach(function(p){
+    var el = document.getElementById(p+day); if (el) el.value = '';
+  });
 }
 
 // Link publik buat dibagikan ke ekspedisi (lewat WA dll) -- klik kotaknya
@@ -4799,8 +4859,6 @@ function doSaveSettings() {
     prioritas_ekspedisi: JSON.stringify(prioritasList),
     reservasi_aktif: document.getElementById('setReservasiAktif').checked ? '1' : '0',
     reservasi_kuota_per_jam: document.getElementById('setReservasiKuota').value.trim() || '5',
-    reservasi_jam_mulai: document.getElementById('setReservasiJamMulai').value || '08:00',
-    reservasi_jam_selesai: document.getElementById('setReservasiJamSelesai').value || '17:00',
     reservasi_h_maks: document.getElementById('setReservasiHMaks').value.trim() || '3'
   };
   var selBuka = document.getElementById('inputAntrianBuka');
@@ -4810,6 +4868,13 @@ function doSaveSettings() {
       var b = (document.getElementById('jbuka_'+d)||{}).value||'';
       var t = (document.getElementById('jtutup_'+d)||{}).value||'';
       params['jadwal_'+d] = (b&&t) ? b+'-'+t : '';
+      // Jadwal reservasi per-hari + istirahat (lihat renderRsvJadwalSettings).
+      var rb = (document.getElementById('rsvbuka_'+d)||{}).value||'';
+      var rt = (document.getElementById('rsvtutup_'+d)||{}).value||'';
+      params['reservasi_jadwal_'+d] = (rb&&rt) ? rb+'-'+rt : '';
+      var ib = (document.getElementById('rsvistbuka_'+d)||{}).value||'';
+      var it = (document.getElementById('rsvisttutup_'+d)||{}).value||'';
+      params['reservasi_istirahat_'+d] = (ib&&it) ? ib+'-'+it : '';
     });
   }
   loading(true);
@@ -4848,7 +4913,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.8';
+var APP_VERSION = 'LOADFLOW-v1.3.3';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
