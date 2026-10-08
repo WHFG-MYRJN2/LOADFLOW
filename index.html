@@ -4844,7 +4844,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.5';
+var APP_VERSION = 'LOADFLOW-v2.3.6';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -4975,8 +4975,8 @@ var WA_TEMPLATES = {
     'Semoga perjalanan lancar! 🙏'
 };
 
-// Link tiket (ganti dengan URL GitHub Pages Anda)
-var APP_LINK = 'https://gdfg-jn2.github.io/DAFTAR-ANTRIAN-GDFG';
+// Link tiket (hosting pindah ke Vercel)
+var APP_LINK = 'https://antrian-online-gdfgjn2.vercel.app';
 
 function buildWaMsg(r) {
   var tpl = WA_TEMPLATES[r.status] || WA_TEMPLATES['ANTRIAN'];
