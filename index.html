@@ -4753,13 +4753,17 @@ function loadSettingsForm() {
   document.getElementById('setReservasiJamSelesai').value= S.reservasi_jam_selesai || '17:00';
   document.getElementById('setReservasiHMaks').value     = S.reservasi_h_maks || '3';
   var lb = document.getElementById('rsvLinkBox');
-  if (lb) lb.textContent = location.origin + location.pathname + '#reservasi';
+  if (lb) lb.textContent = APP_LINK + '#reservasi';
 }
 
 // Link publik buat dibagikan ke ekspedisi (lewat WA dll) -- klik kotaknya
 // di Settings buat nyalin, sama kayak pola copyGasUrl() di bawah.
+// PENTING: pake APP_LINK (halaman pendaftaran sopir), BUKAN location.origin --
+// soalnya halaman #reservasi-nya emang ada di repo pendaftaran, bukan di repo
+// dashboard ini. Dulu sempat salah pake location.origin+pathname (jadi nunjuk
+// ke dashboard sendiri) -- udah dibenerin di sini.
 function copyRsvLink() {
-  var link = location.origin + location.pathname + '#reservasi';
+  var link = APP_LINK + '#reservasi';
   navigator.clipboard && navigator.clipboard.writeText(link).then(function(){ toast('✅ Link reservasi disalin'); });
 }
 
@@ -4844,7 +4848,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.6';
+var APP_VERSION = 'LOADFLOW-v2.3.7';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
