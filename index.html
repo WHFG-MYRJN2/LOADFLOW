@@ -531,9 +531,12 @@ input,select,textarea{font-family:inherit}
 .jadwal-title{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .jadwal-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .jadwal-day{font-size:13px;font-weight:600;color:#374151;width:70px;flex-shrink:0}
-.jadwal-times{display:flex;align-items:center;gap:6px;flex:1}
+.jadwal-times{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap}
 .jadwal-times input[type="time"]{flex:1;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151}
 .jadwal-times span{color:#94a3b8;font-size:12px}
+.time-sel{padding:6px 4px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151;background:#fff}
+.time-sel-colon{color:#94a3b8;font-size:12px;font-weight:700}
+.btn24jam{padding:4px 8px;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;cursor:pointer;color:#2563eb;background:#eff6ff;white-space:nowrap}
 .jadwal-libur{font-size:12px;color:#94a3b8;font-style:italic}
 .rsv-jadwal-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
 .rsv-jadwal-row:last-child{border-bottom:none}
@@ -934,9 +937,12 @@ input,select,textarea{font-family:inherit}
 .jadwal-title{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .jadwal-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .jadwal-day{font-size:13px;font-weight:600;color:#374151;width:70px;flex-shrink:0}
-.jadwal-times{display:flex;align-items:center;gap:6px;flex:1}
+.jadwal-times{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap}
 .jadwal-times input[type="time"]{flex:1;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151}
 .jadwal-times span{color:#94a3b8;font-size:12px}
+.time-sel{padding:6px 4px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#374151;background:#fff}
+.time-sel-colon{color:#94a3b8;font-size:12px;font-weight:700}
+.btn24jam{padding:4px 8px;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;cursor:pointer;color:#2563eb;background:#eff6ff;white-space:nowrap}
 .jadwal-libur{font-size:12px;color:#94a3b8;font-style:italic}
 .rsv-jadwal-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #e5e7eb}
 .rsv-jadwal-row:last-child{border-bottom:none}
@@ -4833,20 +4839,22 @@ function renderRsvJadwalSettings() {
     var jp = j ? j.split('-') : ['',''];
     var ist = (S && S['reservasi_istirahat_'+d]) || '';
     var ip = ist ? ist.split('-') : ['',''];
+    var rsvOc = 'renderRsvKuotaForDay(\''+d+'\')';
     return '<div class="rsv-jadwal-row">'+
       '<div class="jadwal-day">'+DAYS_LBL[i]+'</div>'+
       '<div class="rsv-jadwal-body">'+
         '<div class="jadwal-times">'+
           '<span class="rsv-jadwal-label">Jam</span>'+
-          '<input type="time" id="rsvbuka_'+d+'" value="'+(jp[0]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
+          timeSelHtml_('rsvbuka_'+d, jp[0], rsvOc) +
           '<span>-</span>'+
-          '<input type="time" id="rsvtutup_'+d+'" value="'+(jp[1]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
+          timeSelHtml_('rsvtutup_'+d, jp[1], rsvOc) +
+          '<button type="button" onclick="set24JamRsv(\''+d+'\')" class="btn24jam">24 Jam</button>'+
         '</div>'+
         '<div class="jadwal-times">'+
           '<span class="rsv-jadwal-label">Istirahat</span>'+
-          '<input type="time" id="rsvistbuka_'+d+'" value="'+(ip[0]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
+          timeSelHtml_('rsvistbuka_'+d, ip[0], rsvOc) +
           '<span>-</span>'+
-          '<input type="time" id="rsvisttutup_'+d+'" value="'+(ip[1]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
+          timeSelHtml_('rsvisttutup_'+d, ip[1], rsvOc) +
         '</div>'+
         '<div id="rsvKuotaWrap_'+d+'" style="margin-top:2px"></div>'+
       '</div>'+
@@ -4859,6 +4867,14 @@ function renderRsvJadwalSettings() {
   DAYS_ID.forEach(function(d) { renderRsvKuotaForDay(d); });
 }
 
+// "24 Jam" -- isi jam mulai reservasi 00:00 & jam tutup 23:59, sama kayak
+// set24JamJadwal() buat jadwal antrian walk-in (lihat komentarnya).
+function set24JamRsv(day) {
+  timeSelSet_('rsvbuka_'+day, '00:00');
+  timeSelSet_('rsvtutup_'+day, '23:59');
+  renderRsvKuotaForDay(day);
+}
+
 // Render ulang daftar input "kuota per jam slot" buat 1 hari tertentu --
 // dipanggil pas render awal DAN tiap kali jam mulai/selesai/istirahat hari
 // itu diubah (lihat onchange di renderRsvJadwalSettings). Kalau jam belum
@@ -4867,10 +4883,10 @@ function renderRsvJadwalSettings() {
 function renderRsvKuotaForDay(d) {
   var wrap = document.getElementById('rsvKuotaWrap_'+d);
   if (!wrap) return;
-  var jamMulai   = (document.getElementById('rsvbuka_'+d)||{}).value || '';
-  var jamSelesai = (document.getElementById('rsvtutup_'+d)||{}).value || '';
-  var istMulai   = (document.getElementById('rsvistbuka_'+d)||{}).value || '';
-  var istSelesai = (document.getElementById('rsvisttutup_'+d)||{}).value || '';
+  var jamMulai   = timeSelVal_('rsvbuka_'+d);
+  var jamSelesai = timeSelVal_('rsvtutup_'+d);
+  var istMulai   = timeSelVal_('rsvistbuka_'+d);
+  var istSelesai = timeSelVal_('rsvisttutup_'+d);
   var slots = buildJamSlotsJs_(jamMulai, jamSelesai, istMulai, istSelesai);
   if (!slots.length) { wrap.innerHTML = ''; return; }
   var existingMap = _rsvKuotaInit[d] || {};
@@ -4901,14 +4917,14 @@ function refreshAllRsvKuotaPlaceholder() {
 
 function clearRsvJadwal(day) {
   ['rsvbuka_','rsvtutup_','rsvistbuka_','rsvisttutup_'].forEach(function(p){
-    var el = document.getElementById(p+day); if (el) el.value = '';
+    timeSelClear_(p+day);
   });
   renderRsvKuotaForDay(day);
 }
 
 function clearRsvIstirahat(day) {
   ['rsvistbuka_','rsvisttutup_'].forEach(function(p){
-    var el = document.getElementById(p+day); if (el) el.value = '';
+    timeSelClear_(p+day);
   });
   renderRsvKuotaForDay(day);
 }
@@ -4962,15 +4978,15 @@ function doSaveSettings() {
   if(selBuka) params.antrian_buka = selBuka.value || '';
   if(typeof DAYS_ID !== 'undefined') {
     DAYS_ID.forEach(function(d) {
-      var b = (document.getElementById('jbuka_'+d)||{}).value||'';
-      var t = (document.getElementById('jtutup_'+d)||{}).value||'';
+      var b = timeSelVal_('jbuka_'+d);
+      var t = timeSelVal_('jtutup_'+d);
       params['jadwal_'+d] = (b&&t) ? b+'-'+t : '';
       // Jadwal reservasi per-hari + istirahat (lihat renderRsvJadwalSettings).
-      var rb = (document.getElementById('rsvbuka_'+d)||{}).value||'';
-      var rt = (document.getElementById('rsvtutup_'+d)||{}).value||'';
+      var rb = timeSelVal_('rsvbuka_'+d);
+      var rt = timeSelVal_('rsvtutup_'+d);
       params['reservasi_jadwal_'+d] = (rb&&rt) ? rb+'-'+rt : '';
-      var ib = (document.getElementById('rsvistbuka_'+d)||{}).value||'';
-      var it = (document.getElementById('rsvisttutup_'+d)||{}).value||'';
+      var ib = timeSelVal_('rsvistbuka_'+d);
+      var it = timeSelVal_('rsvisttutup_'+d);
       params['reservasi_istirahat_'+d] = (ib&&it) ? ib+'-'+it : '';
       // Kuota per jam slot (override) hari ini -- lihat renderRsvKuotaForDay.
       var slotsHari = buildJamSlotsJs_(rb, rt, ib, it);
@@ -5019,7 +5035,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.4.0';
+var APP_VERSION = 'LOADFLOW-v1.3.3';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -6475,6 +6491,52 @@ function checkAlarms(list) {
 var DAYS_ID  = ['minggu','senin','selasa','rabu','kamis','jumat','sabtu'];
 var DAYS_LBL = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 
+// ── TIME PICKER 24 JAM (dropdown jam+menit, BUKAN <input type="time">) ──
+// <input type="time"> native formatnya ikut locale device (banyak HP admin
+// region-nya ke-set US jadi munculnya AM/PM, bukan 24 jam) -- nggak ada cara
+// HTML/CSS buat maksa itu konsisten di semua browser. Diganti total pake 2
+// <select> (jam 00-23 + menit) yang di-render manual, jadi dijamin SELALU
+// format 24 jam di device manapun. '59' sengaja ada di opsi menit supaya
+// tombol "24 Jam" bisa set jam tutup ke "23:59" (observasi penuh sampe akhir
+// hari -- lihat isAntrianBuka()/buildJamSlots_ yang pakai perbandingan "<").
+var TIME_MINUTE_OPTS_ = ['00','15','30','45','59'];
+function timeSelHtml_(idPrefix, value, onchangeJs) {
+  var hh = '', mm = '';
+  if (value) { var p = String(value).split(':'); hh = p[0]||''; mm = p[1]||''; }
+  var hOpts = '<option value="">--</option>';
+  for (var h = 0; h <= 23; h++) {
+    var hs = (h<10?'0':'')+h;
+    hOpts += '<option value="'+hs+'"'+(hs===hh?' selected':'')+'>'+hs+'</option>';
+  }
+  var mList = TIME_MINUTE_OPTS_.slice();
+  if (mm && mList.indexOf(mm) === -1) mList.push(mm);
+  mList.sort();
+  var mOpts = mList.map(function(m){ return '<option value="'+m+'"'+(m===mm?' selected':'')+'>'+m+'</option>'; }).join('');
+  var oc = onchangeJs ? ' onchange="'+onchangeJs+'"' : '';
+  return '<select id="'+idPrefix+'_h" class="time-sel"'+oc+'>'+hOpts+'</select>'+
+         '<span class="time-sel-colon">:</span>'+
+         '<select id="'+idPrefix+'_m" class="time-sel"'+oc+'>'+mOpts+'</select>';
+}
+function timeSelVal_(idPrefix) {
+  var h = (document.getElementById(idPrefix+'_h')||{}).value || '';
+  var m = (document.getElementById(idPrefix+'_m')||{}).value || '';
+  if (!h) return '';
+  return h + ':' + (m || '00');
+}
+function timeSelSet_(idPrefix, value) {
+  var hh = '', mm = '';
+  if (value) { var p = String(value).split(':'); hh = p[0]||''; mm = p[1]||''; }
+  var he = document.getElementById(idPrefix+'_h'); if (he) he.value = hh;
+  var me = document.getElementById(idPrefix+'_m');
+  if (me) {
+    if (mm && !me.querySelector('option[value="'+mm+'"]')) {
+      var opt = document.createElement('option'); opt.value = mm; opt.textContent = mm; me.appendChild(opt);
+    }
+    me.value = mm;
+  }
+}
+function timeSelClear_(idPrefix) { timeSelSet_(idPrefix, ''); }
+
 function isAntrianBuka() {
   if (!S) return true;
   if (S.antrian_buka === '1') return true;
@@ -6529,18 +6591,26 @@ function renderJadwalSettings() {
     return '<div class="jadwal-row">'+
       '<div class="jadwal-day">'+DAYS_LBL[i]+'</div>'+
       '<div class="jadwal-times">'+
-        '<input type="time" id="jbuka_'+d+'" value="'+(parts[0]||'')+'" placeholder="--:--">'+
+        timeSelHtml_('jbuka_'+d, parts[0]) +
         '<span>-</span>'+
-        '<input type="time" id="jtutup_'+d+'" value="'+(parts[1]||'')+'" placeholder="--:--">'+
-        '<button onclick="clearJadwal(\"'+d+'\")" style="padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;cursor:pointer;color:#94a3b8;background:#fff">Libur</button>'+
+        timeSelHtml_('jtutup_'+d, parts[1]) +
+        '<button onclick="clearJadwal(\''+d+'\')" style="padding:4px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;cursor:pointer;color:#94a3b8;background:#fff">Libur</button>'+
+        '<button onclick="set24JamJadwal(\''+d+'\')" class="btn24jam">24 Jam</button>'+
       '</div></div>';
   }).join('');
 }
 
 function clearJadwal(day) {
-  var b = document.getElementById('jbuka_'+day);
-  var t = document.getElementById('jtutup_'+day);
-  if(b) b.value=''; if(t) t.value='';
+  timeSelClear_('jbuka_'+day);
+  timeSelClear_('jtutup_'+day);
+}
+
+// "24 Jam" -- isi otomatis jam mulai 00:00 & jam tutup 23:59 (bukan 24:00,
+// soalnya pilihan jam cuma 00-23 -- tapi hasilnya sama aja, slot/jendela
+// jam 23:00-24:00 tetap ketutup karena perbandingannya "< jamTutup").
+function set24JamJadwal(day) {
+  timeSelSet_('jbuka_'+day, '00:00');
+  timeSelSet_('jtutup_'+day, '23:59');
 }
 
 function updateToggleBukaUI() {
