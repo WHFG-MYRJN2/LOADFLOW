@@ -1586,11 +1586,11 @@ input,select,textarea{font-family:inherit}
           <span class="toggle-keluar-slider"></span>
         </label>
       </div>
-      <div class="fg"><label>Kuota per jam</label><input type="number" id="setReservasiKuota" placeholder="5" min="1" style="width:100px"></div>
+      <div class="fg"><label>Kuota per jam (default)</label><input type="number" id="setReservasiKuota" placeholder="5" min="1" style="width:100px" onchange="refreshAllRsvKuotaPlaceholder()"></div>
       <div class="fg"><label>Maksimal reservasi H+ berapa hari</label><input type="number" id="setReservasiHMaks" placeholder="3" min="0" style="width:100px"></div>
       <div class="fg">
         <label>Jam Operasional Reservasi (per hari)</label>
-        <div class="set-hint" style="margin-top:0;margin-bottom:8px">Jam buka reservasi bisa beda-beda tiap hari, dan bisa diisi jam istirahat (slot di jam itu otomatis nggak ditawarin). Kosongin Jam Mulai/Selesai kalau hari itu libur/gak buka reservasi.</div>
+        <div class="set-hint" style="margin-top:0;margin-bottom:8px">Jam buka reservasi bisa beda-beda tiap hari, dan bisa diisi jam istirahat (slot di jam itu otomatis nggak ditawarin). Kosongin Jam Mulai/Selesai kalau hari itu libur/gak buka reservasi. Kuota tiap jam slot juga bisa diatur sendiri-sendiri (kosongin kalau mau ikut kuota default di atas).</div>
         <div id="rsvJadwalRows" style="margin-top:4px"></div>
       </div>
       <div class="set-hint">Kalau aktif, ekspedisi bisa reservasi jam kedatangan sendiri lewat link di bawah ini (bisa dibagikan via WA). Truk yang dateng tanpa reservasi (walk-in) tetap diterima, tapi diprioritaskan di belakang yang sudah reservasi pada tab Antrian.</div>
@@ -3228,7 +3228,7 @@ function fetchReservasiAdmin() {
           '<span style="font-weight:800;font-size:14px">🕐 '+esc(r.jam)+'</span>'+
           '<span style="font-size:11px;font-weight:700;color:'+warna+'">'+(STAT_LABEL[r.status]||r.status)+'</span>'+
         '</div>'+
-        '<div style="font-size:13px;font-weight:700;color:#0f172a">'+esc(r.no_pol)+' · '+esc(r.eksp)+'</div>'+
+        '<div style="font-size:13px;font-weight:700;color:#0f172a">'+esc(r.no_pol)+' · '+esc(r.eksp)+(r.jenis_kendaraan?' · '+esc(r.jenis_kendaraan):'')+'</div>'+
         '<div style="font-size:12px;color:#64748b">'+esc(r.nama)+' · '+esc(r.jenis)+(r.tipe?' · '+esc(r.tipe):'')+(r.tujuan?' → '+esc(r.tujuan):'')+'</div>'+
         '<div style="font-size:11px;color:#94a3b8;margin-top:2px">Kode: '+esc(r.kode)+' · dibuat oleh '+esc(r.dibuat_oleh)+(r.dibuat_pada?' · '+esc(r.dibuat_pada):'')+'</div>'+
         (r.status === STATUS_RSV_AKTIF
@@ -3257,8 +3257,10 @@ function onJenisChangeRa() {
 }
 
 function openRsvAdminModal() {
-  ['raNama','raEksp','raNopol','raNoDoc','raQty','raTujuan','raHp'].forEach(function(id){ var el=g(id); if(el) el.value=''; });
+  ['raNama','raEksp','raNopol','raNoDoc','raQty','raTujuan','raHp','raJenisKendaraanLain'].forEach(function(id){ var el=g(id); if(el) el.value=''; });
   if (g('raJenis')) g('raJenis').value = '';
+  if (g('raJenisKendaraan')) g('raJenisKendaraan').value = '';
+  if (g('raJenisKendaraanLain')) g('raJenisKendaraanLain').style.display = 'none';
   onJenisChangeRa();
   _raJamTerpilih = '';
   var ti = g('raTanggal');
@@ -3302,6 +3304,9 @@ function submitRsvAdmin() {
   var nopol   = g('raNopol').value.trim().toUpperCase();
   var nodoc   = g('raNoDoc').value.trim();
   var qty     = g('raQty').value.trim();
+  var jKend   = g('raJenisKendaraan') ? g('raJenisKendaraan').value : '';
+  var jKendLain = g('raJenisKendaraanLain') ? g('raJenisKendaraanLain').value.trim() : '';
+  var jenis_kendaraan = jKend === 'lain' ? jKendLain : jKend;
   var jenis   = g('raJenis').value;
   var tipe    = g('raTipe').value;
   var tujuan  = g('raTujuan').value.trim();
@@ -3318,7 +3323,7 @@ function submitRsvAdmin() {
 
   loading(true);
   api({ action:'buatReservasiSlot', token:_sessionToken, tanggal:tanggal, jam:jam, nama:nama, eksp:eksp,
-        nopol:nopol, nodoc:nodoc, qty:qty, jenis:jenis, tipe:tipe, tujuan:tujuan, hp:hp },
+        nopol:nopol, nodoc:nodoc, qty:qty, jenis_kendaraan:jenis_kendaraan, jenis:jenis, tipe:tipe, tujuan:tujuan, hp:hp },
     function(res) {
       loading(false);
       if (res && res.success) { toast('✅ Reservasi dibuat'); closeRsvAdminModal(); fetchReservasiAdmin(); }
@@ -3640,8 +3645,8 @@ function _renderDockTabInner() {
   el.innerHTML = html;
 }
 
-function toggleJenisKendaraanLain(sel) {
-  var inp = document.getElementById('fJenisKendaraanLain');
+function toggleJenisKendaraanLain(sel, targetId) {
+  var inp = document.getElementById(targetId || 'fJenisKendaraanLain');
   if (!inp) return;
   inp.style.display = sel.value === 'lain' ? '' : 'none';
   if (sel.value !== 'lain') inp.value = '';
@@ -4772,9 +4777,57 @@ function loadSettingsForm() {
 // jadwal antrian walk-in (jadwal_senin dkk, lihat renderJadwalSettings di
 // bawah). Dipisah fungsi sendiri biar gampang dimaintain, tapi pola & nama
 // fungsinya sengaja mirip renderJadwalSettings/clearJadwal.
+//
+// Kuota per jam slot BISA beda-beda per hari & per jam (lihat
+// getReservasiKuotaMap_ di Code.gs) -- makanya tiap kali jam mulai/selesai
+// atau istirahat suatu hari diubah, daftar slot jam hari itu (dan input
+// kuotanya masing-masing) ikut di-render ulang lewat renderRsvKuotaForDay().
+// _rsvKuotaInit nyimpen override yang udah tersimpan di sheet (dibaca pas
+// loadSettingsForm), dipakai buat ngisi value awal tiap input kuota.
+var _rsvKuotaInit = {};
+
+function parseRsvKuotaMap_(raw) {
+  var map = {};
+  raw = String(raw||'').trim();
+  if (!raw) return map;
+  raw.split(',').forEach(function(pair) {
+    var p = pair.split('=');
+    if (p.length === 2) {
+      var jam = p[0].trim();
+      var n = p[1].trim();
+      if (jam && n !== '') map[jam] = n;
+    }
+  });
+  return map;
+}
+
+// Replika JS dari buildJamSlots_() di Code.gs -- dipakai buat ngitung daftar
+// slot jam di BROWSER (tanpa roundtrip ke server) tiap kali admin ubah jam
+// mulai/selesai/istirahat suatu hari, biar input kuota per-jamnya langsung
+// nyesuain.
+function buildJamSlotsJs_(jamMulai, jamSelesai, istMulai, istSelesai) {
+  var out = [];
+  if (!jamMulai || !jamSelesai) return out;
+  var toMin = function(t) {
+    var p = String(t||'').split(':');
+    return (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0);
+  };
+  var m0 = toMin(jamMulai), m1 = toMin(jamSelesai);
+  var hasIst = istMulai && istSelesai;
+  var im0 = hasIst ? toMin(istMulai) : -1, im1 = hasIst ? toMin(istSelesai) : -1;
+  for (var m = m0; m < m1; m += 60) {
+    if (hasIst && m < im1 && (m+60) > im0) continue;
+    var hh = Math.floor(m/60), mm = m%60;
+    out.push((hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm);
+  }
+  return out;
+}
+
 function renderRsvJadwalSettings() {
   var wrap = document.getElementById('rsvJadwalRows');
   if (!wrap) return;
+  _rsvKuotaInit = {};
+  DAYS_ID.forEach(function(d) { _rsvKuotaInit[d] = parseRsvKuotaMap_(S && S['reservasi_kuota_'+d]); });
   wrap.innerHTML = DAYS_ID.map(function(d, i) {
     var j = (S && S['reservasi_jadwal_'+d]) || '';
     var jp = j ? j.split('-') : ['',''];
@@ -4785,16 +4838,17 @@ function renderRsvJadwalSettings() {
       '<div class="rsv-jadwal-body">'+
         '<div class="jadwal-times">'+
           '<span class="rsv-jadwal-label">Jam</span>'+
-          '<input type="time" id="rsvbuka_'+d+'" value="'+(jp[0]||'')+'" placeholder="--:--">'+
+          '<input type="time" id="rsvbuka_'+d+'" value="'+(jp[0]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
           '<span>-</span>'+
-          '<input type="time" id="rsvtutup_'+d+'" value="'+(jp[1]||'')+'" placeholder="--:--">'+
+          '<input type="time" id="rsvtutup_'+d+'" value="'+(jp[1]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
         '</div>'+
         '<div class="jadwal-times">'+
           '<span class="rsv-jadwal-label">Istirahat</span>'+
-          '<input type="time" id="rsvistbuka_'+d+'" value="'+(ip[0]||'')+'" placeholder="--:--">'+
+          '<input type="time" id="rsvistbuka_'+d+'" value="'+(ip[0]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
           '<span>-</span>'+
-          '<input type="time" id="rsvisttutup_'+d+'" value="'+(ip[1]||'')+'" placeholder="--:--">'+
+          '<input type="time" id="rsvisttutup_'+d+'" value="'+(ip[1]||'')+'" placeholder="--:--" onchange="renderRsvKuotaForDay(\''+d+'\')">'+
         '</div>'+
+        '<div id="rsvKuotaWrap_'+d+'" style="margin-top:2px"></div>'+
       '</div>'+
       '<div class="rsv-jadwal-actions">'+
         '<button type="button" onclick="clearRsvJadwal(\''+d+'\')">Libur</button>'+
@@ -4802,18 +4856,61 @@ function renderRsvJadwalSettings() {
       '</div>'+
     '</div>';
   }).join('');
+  DAYS_ID.forEach(function(d) { renderRsvKuotaForDay(d); });
+}
+
+// Render ulang daftar input "kuota per jam slot" buat 1 hari tertentu --
+// dipanggil pas render awal DAN tiap kali jam mulai/selesai/istirahat hari
+// itu diubah (lihat onchange di renderRsvJadwalSettings). Kalau jam belum
+// diisi (hari libur), tampilin keterangan aja -- gaada slot yang bisa diatur
+// kuotanya.
+function renderRsvKuotaForDay(d) {
+  var wrap = document.getElementById('rsvKuotaWrap_'+d);
+  if (!wrap) return;
+  var jamMulai   = (document.getElementById('rsvbuka_'+d)||{}).value || '';
+  var jamSelesai = (document.getElementById('rsvtutup_'+d)||{}).value || '';
+  var istMulai   = (document.getElementById('rsvistbuka_'+d)||{}).value || '';
+  var istSelesai = (document.getElementById('rsvisttutup_'+d)||{}).value || '';
+  var slots = buildJamSlotsJs_(jamMulai, jamSelesai, istMulai, istSelesai);
+  if (!slots.length) { wrap.innerHTML = ''; return; }
+  var existingMap = _rsvKuotaInit[d] || {};
+  var defKuota = (document.getElementById('setReservasiKuota')||{}).value || S.reservasi_kuota_per_jam || '5';
+  wrap.innerHTML = '<div style="font-size:10px;color:#cbd5e1;margin:4px 0 3px">Kuota per jam slot (kosong = ikut default '+esc(defKuota)+')</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">'+
+    slots.map(function(j) {
+      var v = existingMap.hasOwnProperty(j) ? existingMap[j] : '';
+      var safeId = 'rsvkuota_'+d+'_'+j.replace(':','');
+      return '<div style="display:flex;align-items:center;gap:3px;background:#f8fafc;border-radius:6px;padding:3px 6px">'+
+        '<span style="font-size:11px;color:#64748b">'+j+'</span>'+
+        '<input type="number" min="0" id="'+safeId+'" value="'+esc(v)+'" placeholder="'+esc(defKuota)+'" style="width:40px;font-size:11px;padding:2px 4px;border:1px solid #e5e7eb;border-radius:4px">'+
+      '</div>';
+    }).join('')+
+    '</div>';
+}
+
+// Dipanggil pas kuota default diubah -- cuma buat refresh placeholder di
+// semua input kuota per-jam yang lagi kosong (biar kelihatan angka default
+// yang bakal kepake), nggak ngubah value yang udah diisi admin.
+function refreshAllRsvKuotaPlaceholder() {
+  if (typeof DAYS_ID === 'undefined') return;
+  DAYS_ID.forEach(function(d) {
+    var wrap = document.getElementById('rsvKuotaWrap_'+d);
+    if (wrap && wrap.innerHTML) renderRsvKuotaForDay(d);
+  });
 }
 
 function clearRsvJadwal(day) {
   ['rsvbuka_','rsvtutup_','rsvistbuka_','rsvisttutup_'].forEach(function(p){
     var el = document.getElementById(p+day); if (el) el.value = '';
   });
+  renderRsvKuotaForDay(day);
 }
 
 function clearRsvIstirahat(day) {
   ['rsvistbuka_','rsvisttutup_'].forEach(function(p){
     var el = document.getElementById(p+day); if (el) el.value = '';
   });
+  renderRsvKuotaForDay(day);
 }
 
 // Link publik buat dibagikan ke ekspedisi (lewat WA dll) -- klik kotaknya
@@ -4875,6 +4972,15 @@ function doSaveSettings() {
       var ib = (document.getElementById('rsvistbuka_'+d)||{}).value||'';
       var it = (document.getElementById('rsvisttutup_'+d)||{}).value||'';
       params['reservasi_istirahat_'+d] = (ib&&it) ? ib+'-'+it : '';
+      // Kuota per jam slot (override) hari ini -- lihat renderRsvKuotaForDay.
+      var slotsHari = buildJamSlotsJs_(rb, rt, ib, it);
+      var kuotaParts = [];
+      slotsHari.forEach(function(j) {
+        var el = document.getElementById('rsvkuota_'+d+'_'+j.replace(':',''));
+        var v = el ? el.value.trim() : '';
+        if (v !== '') kuotaParts.push(j+'='+v);
+      });
+      params['reservasi_kuota_'+d] = kuotaParts.join(',');
     });
   }
   loading(true);
@@ -4913,7 +5019,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.3.9';
+var APP_VERSION = 'LOADFLOW-v2.4.0';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -6512,6 +6618,18 @@ initSW();
     </div>
     <div class="fg"><label>Nama Sopir</label><input type="text" id="raNama"></div>
     <div class="fg"><label>Nama Ekspedisi</label><input type="text" id="raEksp"></div>
+    <div class="fg">
+      <label>Jenis Kendaraan <small style="color:#9ca3af;font-weight:400">(opsional)</small></label>
+      <select id="raJenisKendaraan" onchange="toggleJenisKendaraanLain(this,'raJenisKendaraanLain')">
+        <option value="">— Pilih Jenis —</option>
+        <option value="Gandeng">Gandeng</option>
+        <option value="Kubikasi">Kubikasi</option>
+        <option value="Built Up">Built Up</option>
+        <option value="Kontainer">Kontainer</option>
+        <option value="lain">Lain-lain</option>
+      </select>
+      <input type="text" id="raJenisKendaraanLain" placeholder="Tulis jenis kendaraan..." style="display:none;margin-top:8px">
+    </div>
     <div class="fg"><label>No. Polisi</label><input type="text" id="raNopol" style="text-transform:uppercase"></div>
     <div class="fg"><label>No. Doc <small style="color:#9ca3af;font-weight:400">(opsional)</small></label><input type="text" id="raNoDoc"></div>
     <div class="fg"><label>Quantity <small style="color:#9ca3af;font-weight:400">(opsional)</small></label><input type="number" id="raQty" min="0"></div>
