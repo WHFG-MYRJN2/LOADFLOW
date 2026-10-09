@@ -1574,6 +1574,16 @@ input,select,textarea{font-family:inherit}
         <textarea id="setPesan"></textarea>
         <div class="set-hint">Variabel: {nama} {nopol} {nomor} {keperluan}</div>
       </div>
+      <div class="fg">
+        <label>Template Pesan Reservasi Slot</label>
+        <textarea id="setPesanRsv" placeholder="Kosongkan untuk pakai teks bawaan"></textarea>
+        <div class="set-hint">Dikirim sopir/ekspedisi setelah reservasi berhasil. Variabel: {nama} {eksp} {nopol} {tanggal} {jam} {kode}. Link status reservasi otomatis ditambahkan di akhir pesan.</div>
+      </div>
+      <div class="fg">
+        <label>Template Pesan Tanya Slot (kalau slot penuh)</label>
+        <textarea id="setPesanSlotPenuh" placeholder="Kosongkan untuk pakai teks bawaan"></textarea>
+        <div class="set-hint">Dikirim lewat tombol "Tanya Ketersediaan" saat semua slot di tanggal itu penuh. Variabel: {tanggal}</div>
+      </div>
     </div>
     <div class="set-group">
       <h3>⭐ Prioritas Ekspedisi</h3>
@@ -4942,6 +4952,8 @@ function loadSettingsForm() {
   document.getElementById('setPrefix').value = S.prefix_nomor   || 'T';
   document.getElementById('setWa').value     = S.no_wa          || '';
   document.getElementById('setPesan').value  = S.pesan_template || '';
+  document.getElementById('setPesanRsv').value       = S.pesan_template_reservasi || '';
+  document.getElementById('setPesanSlotPenuh').value = S.pesan_template_slot_penuh || '';
   document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
   document.getElementById('setReservasiAktif').checked   = String(S.reservasi_aktif) === '1'; // tolerir angka 1 juga
   document.getElementById('setReservasiTampilSisa').checked = String(S.reservasi_tampil_sisa) === '1'; // default mati
@@ -5142,6 +5154,8 @@ function doSaveSettings() {
     prefix_nomor  : document.getElementById('setPrefix').value.trim()||'T',
     no_wa         : document.getElementById('setWa').value.trim(),
     pesan_template: document.getElementById('setPesan').value.trim(),
+    pesan_template_reservasi: document.getElementById('setPesanRsv').value.trim(),
+    pesan_template_slot_penuh: document.getElementById('setPesanSlotPenuh').value.trim(),
     prioritas_ekspedisi: JSON.stringify(prioritasList),
     reservasi_aktif: document.getElementById('setReservasiAktif').checked ? '1' : '0',
     reservasi_kuota_per_jam: document.getElementById('setReservasiKuota').value.trim() || '5',
@@ -5209,7 +5223,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.4.4';
+var APP_VERSION = 'LOADFLOW-v2.4.5';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
