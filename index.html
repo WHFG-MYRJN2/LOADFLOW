@@ -1235,13 +1235,18 @@ input,select,textarea{font-family:inherit}
 <!-- QR Modal -->
 <div class="modal-overlay" id="qrModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="modal-box" style="width:320px;text-align:center">
-    <h3 style="margin-bottom:4px">📱 QR Pendaftaran</h3>
-    <p style="font-size:12px;color:#64748b;margin-bottom:16px">Sopir scan QR ini untuk ambil nomor antrian</p>
+    <h3 style="margin-bottom:10px" id="qrTitle">📱 QR Pendaftaran</h3>
+    <div style="display:flex;background:#f1f5f9;border-radius:10px;padding:3px;margin-bottom:12px">
+      <button type="button" id="qrTabDaftar" onclick="setQrMode('daftar')" style="flex:1;padding:8px 6px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:transparent;color:#64748b">📝 Daftar Langsung</button>
+      <button type="button" id="qrTabRsv" onclick="setQrMode('reservasi')" style="flex:1;padding:8px 6px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:transparent;color:#64748b">📅 Reservasi</button>
+    </div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:16px" id="qrSub">Sopir scan QR ini untuk ambil nomor antrian</p>
     <div id="qrImageWrap" style="background:#fff;padding:12px;border-radius:12px;display:inline-block;border:2px solid #e5e7eb;margin-bottom:14px">
       <img id="qrImage" src="" width="220" height="220" alt="QR Code" style="display:block">
     </div>
+    <div id="qrEmpty" style="display:none;font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;margin-bottom:14px;line-height:1.5">Link halaman reservasi belum diisi.<br>Isi dulu di <b>Pengaturan &rarr; Link Publik</b>, lalu simpan.</div>
     <div style="font-size:11px;color:#94a3b8;margin-bottom:14px;word-break:break-all" id="qrUrl"></div>
-    <button onclick="downloadQRPdf()"
+    <button onclick="downloadQRPdf()" id="qrBtnPdf"
        style="width:100%;padding:11px;background:#2563eb;color:#fff;border-radius:10px;font-weight:700;font-size:14px;border:none;cursor:pointer;margin-bottom:8px">
       ⬇️ Download PDF
     </button>
@@ -1584,6 +1589,11 @@ input,select,textarea{font-family:inherit}
         <textarea id="setPesanSlotPenuh" placeholder="Kosongkan untuk pakai teks bawaan"></textarea>
         <div class="set-hint">Dikirim lewat tombol "Tanya Ketersediaan" saat semua slot di tanggal itu penuh. Variabel: {tanggal}</div>
       </div>
+      <div class="fg">
+        <label>Template Pesan Tanya Petugas (reservasi tutup / tidak dibuka)</label>
+        <textarea id="setPesanRsvTutup" placeholder="Kosongkan untuk pakai teks bawaan"></textarea>
+        <div class="set-hint">Dikirim lewat tombol "Tanya Petugas via WhatsApp" saat reservasi sedang dimatikan, atau tanggal yang dipilih tutup / belum ada jam operasional. Variabel: {tanggal}</div>
+      </div>
     </div>
     <div class="set-group">
       <h3>⭐ Prioritas Ekspedisi</h3>
@@ -1593,6 +1603,13 @@ input,select,textarea{font-family:inherit}
         <div class="set-hint">Truk dari ekspedisi yang namanya cocok persis (gak peduli huruf besar/kecil) bakal ditandai PRIORITAS (kartu merah) di dashboard. Bisa isi lebih dari 1, satu nama per baris.</div>
       </div>
     </div>
+    <div class="set-group">
+      <h3>🔗 Link Publik</h3>
+      <div class="set-hint" style="margin-top:0;margin-bottom:10px">Ada 2 halaman publik yang terpisah: <b>Daftar Langsung</b> (ambil nomor antrian di tempat) dan <b>Reservasi</b> (booking slot jam kedatangan). Link ini dipakai untuk QR, pesan WhatsApp, dan tombol salin.</div>
+      <div class="fg"><label>Link Daftar Langsung</label><input type="url" id="setLinkDaftar" placeholder="https://antrian-online-gdfgjn2.vercel.app"></div>
+      <div class="fg"><label>Link Halaman Reservasi</label><input type="url" id="setLinkReservasi" placeholder="https://....vercel.app"></div>
+    </div>
+
     <div class="set-group">
       <h3>📅 Reservasi Slot</h3>
       <div class="fg" style="display:flex;align-items:center;justify-content:space-between;flex-direction:row">
@@ -2917,7 +2934,7 @@ function showTiket(data) {
 
   // WA template
   var kep = data.jenis + (data.tipe?' - '+data.tipe:'') + (data.tujuan?' ('+data.tujuan+')':'');
-  var statusLink = APP_LINK + '#status/' + data.id;
+  var statusLink = getLinkDaftar_() + '#status/' + data.id;
   var tpl = (S.pesan_template||'Halo, saya {nama} ekspedisi {eksp} No. Pol {nopol} ambil antrian *{nomor}* untuk {keperluan}.')
     .replace('{nama}',data.nama).replace('{eksp}',data.eksp||'')
     .replace('{nopol}',data.no_pol).replace('{nomor}',data.nomor).replace('{keperluan}',kep);
@@ -4954,6 +4971,7 @@ function loadSettingsForm() {
   document.getElementById('setPesan').value  = S.pesan_template || '';
   document.getElementById('setPesanRsv').value       = S.pesan_template_reservasi || '';
   document.getElementById('setPesanSlotPenuh').value = S.pesan_template_slot_penuh || '';
+  document.getElementById('setPesanRsvTutup').value  = S.pesan_template_rsv_tutup || '';
   document.getElementById('setPrioritasEksp').value = getPrioritasEkspedisiList().join('\n');
   document.getElementById('setReservasiAktif').checked   = String(S.reservasi_aktif) === '1'; // tolerir angka 1 juga
   document.getElementById('setReservasiTampilSisa').checked = String(S.reservasi_tampil_sisa) === '1'; // default mati
@@ -4961,7 +4979,9 @@ function loadSettingsForm() {
   document.getElementById('setReservasiHMaks').value     = S.reservasi_h_maks || '3';
   renderRsvJadwalSettings();
   var lb = document.getElementById('rsvLinkBox');
-  if (lb) lb.textContent = APP_LINK + '#reservasi';
+  if (lb) lb.textContent = getLinkReservasi_() || '(isi Link Halaman Reservasi di atas, lalu simpan)';
+  document.getElementById('setLinkDaftar').value     = String(S.link_daftar || '').trim() || APP_LINK;
+  document.getElementById('setLinkReservasi').value  = String(S.link_reservasi || '').trim();
 }
 
 // Jadwal reservasi per-hari (Senin..Minggu) + jam istirahat -- beda dari
@@ -5116,12 +5136,13 @@ function clearRsvIstirahat(day) {
 
 // Link publik buat dibagikan ke ekspedisi (lewat WA dll) -- klik kotaknya
 // di Settings buat nyalin, sama kayak pola copyGasUrl() di bawah.
-// PENTING: pake APP_LINK (halaman pendaftaran sopir), BUKAN location.origin --
-// soalnya halaman #reservasi-nya emang ada di repo pendaftaran, bukan di repo
-// dashboard ini. Dulu sempat salah pake location.origin+pathname (jadi nunjuk
-// ke dashboard sendiri) -- udah dibenerin di sini.
+// Link-nya diambil dari Pengaturan > Link Publik (link_reservasi) -- halaman
+// reservasi sekarang punya situs/link sendiri, terpisah dari Daftar Langsung.
+function getLinkDaftar_() { return String(S.link_daftar || '').trim().split('#')[0] || APP_LINK; }
+function getLinkReservasi_() { return String(S.link_reservasi || '').trim().split('#')[0]; }
 function copyRsvLink() {
-  var link = APP_LINK + '#reservasi';
+  var link = getLinkReservasi_();
+  if (!link) { toast('⚠️ Isi Link Halaman Reservasi di Pengaturan dulu'); return; }
   navigator.clipboard && navigator.clipboard.writeText(link).then(function(){ toast('✅ Link reservasi disalin'); });
 }
 
@@ -5156,11 +5177,14 @@ function doSaveSettings() {
     pesan_template: document.getElementById('setPesan').value.trim(),
     pesan_template_reservasi: document.getElementById('setPesanRsv').value.trim(),
     pesan_template_slot_penuh: document.getElementById('setPesanSlotPenuh').value.trim(),
+    pesan_template_rsv_tutup: document.getElementById('setPesanRsvTutup').value.trim(),
     prioritas_ekspedisi: JSON.stringify(prioritasList),
     reservasi_aktif: document.getElementById('setReservasiAktif').checked ? '1' : '0',
     reservasi_kuota_per_jam: document.getElementById('setReservasiKuota').value.trim() || '5',
     reservasi_h_maks: document.getElementById('setReservasiHMaks').value.trim() || '3',
-    reservasi_tampil_sisa: document.getElementById('setReservasiTampilSisa').checked ? '1' : '0'
+    reservasi_tampil_sisa: document.getElementById('setReservasiTampilSisa').checked ? '1' : '0',
+    link_daftar: document.getElementById('setLinkDaftar').value.trim().split('#')[0],
+    link_reservasi: document.getElementById('setLinkReservasi').value.trim().split('#')[0]
   };
   var selBuka = document.getElementById('inputAntrianBuka');
   if(selBuka) params.antrian_buka = selBuka.value || '';
@@ -5223,7 +5247,7 @@ var _swReg = null;
 // ternyata susah didiagnosis dari jarak jauh kalau ada yang nggak beres —
 // cara manual ini nggak elegan tapi DIJAMIN selalu muncul, karena langsung
 // ditulis begitu halaman dimuat, tanpa nunggu proses async apa pun.)
-var APP_VERSION = 'LOADFLOW-v2.4.5';
+var APP_VERSION = 'LOADFLOW-v2.4.6';
 
 function initSW() {
   var elV = document.getElementById('appVersion');
@@ -5399,7 +5423,7 @@ function buildWaMsg(r) {
     .replace(/{tujuan}/g, tujuanStr)
     .replace(/{posisi}/g, posisi > 0 ? posisi : 'tidak ada')
     .replace(/{muatInfo}/g, muatInfo)
-    .replace(/{link}/g,   APP_LINK + '#status/' + r.id);
+    .replace(/{link}/g,   getLinkDaftar_() + '#status/' + r.id);
 }
 
 function openDetailDirect(btn) {
@@ -6216,14 +6240,40 @@ function runPopupAction(key, e) {
 }
 
 
-function showQR() {
-  var url = APP_LINK || location.origin + location.pathname;
-  document.getElementById('qrUrl').textContent = url + '#form';
-  var qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&data=' + encodeURIComponent(url + '#form');
-  var img = document.getElementById('qrImage');
-  img.crossOrigin = 'anonymous';
-  img.src = qrApiUrl + '&t=' + Date.now(); // cache bust
+var _qrMode = 'daftar';
+function showQR(mode) {
   document.getElementById('qrModal').style.display = 'flex';
+  setQrMode(mode || _qrMode || 'daftar');
+}
+
+// Toggle QR: "Daftar Langsung" (formpendf) <-> "Reservasi" (situs reservasi)
+function setQrMode(mode) {
+  _qrMode = (mode === 'reservasi') ? 'reservasi' : 'daftar';
+  var isRsv = _qrMode === 'reservasi';
+  var on  = 'background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(0,0,0,.12)';
+  var off = 'background:transparent;color:#64748b;box-shadow:none';
+  document.getElementById('qrTabDaftar').style.cssText += ';' + (isRsv ? off : on);
+  document.getElementById('qrTabRsv').style.cssText    += ';' + (isRsv ? on : off);
+  document.getElementById('qrTitle').textContent = isRsv ? '📅 QR Reservasi' : '📱 QR Pendaftaran';
+  document.getElementById('qrSub').textContent   = isRsv ? 'Ekspedisi/sopir scan QR ini untuk reservasi slot kedatangan'
+                                                         : 'Sopir scan QR ini untuk ambil nomor antrian';
+  var url = isRsv ? getLinkReservasi_() : (getLinkDaftar_() + '#form');
+  var img = document.getElementById('qrImage');
+  var wrap = document.getElementById('qrImageWrap');
+  var empty = document.getElementById('qrEmpty');
+  var btn = document.getElementById('qrBtnPdf');
+  if (!url) {
+    wrap.style.display = 'none'; empty.style.display = '';
+    document.getElementById('qrUrl').textContent = '';
+    img.removeAttribute('src');
+    btn.disabled = true; btn.style.opacity = '.45';
+    return;
+  }
+  wrap.style.display = 'inline-block'; empty.style.display = 'none';
+  btn.disabled = false; btn.style.opacity = '';
+  document.getElementById('qrUrl').textContent = url;
+  img.crossOrigin = 'anonymous';
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&data=' + encodeURIComponent(url) + '&t=' + Date.now(); // cache bust
 }
 
 function downloadQRPdf() {
@@ -6235,7 +6285,7 @@ function downloadQRPdf() {
     var doc = new jsPDF({ unit:'mm', format:'a4', orientation:'portrait' });
 
     var gudang = (S && S.nama_gudang) ? S.nama_gudang : 'WH FG JN2';
-    var url    = document.getElementById('qrUrl').textContent || APP_LINK;
+    var url    = document.getElementById('qrUrl').textContent || getLinkDaftar_();
 
     // Background
     doc.setFillColor(15, 45, 84);
@@ -6248,7 +6298,7 @@ function downloadQRPdf() {
     doc.text(gudang, 105, 20, { align:'center' });
     doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Scan QR untuk Ambil Nomor Antrian', 105, 32, { align:'center' });
+    doc.text(_qrMode === 'reservasi' ? 'Scan QR untuk Reservasi Slot Kedatangan' : 'Scan QR untuk Ambil Nomor Antrian', 105, 32, { align:'center' });
 
     // QR image — convert ke canvas dulu
     var canvas = document.createElement('canvas');
@@ -6281,7 +6331,12 @@ function downloadQRPdf() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     doc.setTextColor(60, 60, 60);
-    var steps = [
+    var steps = (_qrMode === 'reservasi') ? [
+      '1. Buka kamera HP dan arahkan ke QR Code di atas',
+      '2. Tap link yang muncul di layar',
+      '3. Pilih tanggal & jam kedatangan, isi data kendaraan',
+      '4. Simpan tiket/QR reservasi, tunjukkan ke petugas saat tiba'
+    ] : [
       '1. Buka kamera HP dan arahkan ke QR Code di atas',
       '2. Tap link yang muncul di layar',
       '3. Isi data diri dan informasi pengiriman',
@@ -6301,7 +6356,7 @@ function downloadQRPdf() {
     doc.setTextColor(180,200,255);
     doc.text('Powered by WH FG JN2', 105, 291, { align:'center' });
 
-    doc.save('QR-Antrian-' + gudang.replace(/\s/g,'_') + '.pdf');
+    doc.save((_qrMode === 'reservasi' ? 'QR-Reservasi-' : 'QR-Antrian-') + gudang.replace(/\s/g,'_') + '.pdf');
   } catch(e) {
     alert('Gagal buat PDF: ' + e.message);
   }
